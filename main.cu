@@ -25,14 +25,15 @@ void Color(uint16_t number, uint8_t& n)
 	// the second number is our putput
 }
 
-__global__ void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int i)
+__global__ void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int i, int height)
 {
+	//3840 1920
 	int c = blockIdx.x * blockDim.x + threadIdx.x; //c is coresponding to j(width in the for loop)
 	if (c < width || c >= 0)
 	{
 		int calc = i * width + c;  //their scope is threadLifeTime
 		uint8_t n = 0;
-		Color(d_Data[calc], n);
+		Color(d_Data[height - calc -1], n);
 		//h   !w
 		short idx = (i & 1) + !(c & 1);
 		cpy_Data[3 * calc + 0] = 0;//r
@@ -65,16 +66,16 @@ uint8_t* GetCudaRdy(uint16_t*& data, const int& height, const int& width)
 
 	cudaStatus = cudaMemcpy(cpyData, h_cpy, sizeof(uint8_t) * size * 3, cudaMemcpyHostToDevice);
 	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");// here i am actually not in need to transfer data, but i wanted to see if it makes difference
-	dim3 sizeOfBlock(ceilf(width / 512)); // 4
-	dim3 totalThreads(512);
+	dim3 sizeOfBlock(ceilf(width >> 9)); // 4
+	dim3 totalThreads(THREADS_PER_BLOCK);
 
-	for (int i = 0; i < size / width; i++)
+	for (int i = 0; i < height; i++)
 	{
-		Checker << <sizeOfBlock, totalThreads >> > (d_data, cpyData, width, i);
+		Checker << <sizeOfBlock, totalThreads >> > (d_data, cpyData, width, i, height);
 	}
 
 	cudaStatus = cudaDeviceSynchronize();
-
+	delete[] data;
 	cudaStatus = cudaMemcpy(h_cpy, cpyData, sizeof(uint8_t) * size * 3, cudaMemcpyDeviceToHost);
 	cudaFree(cpyData);
 	cudaFree(d_data);// it was said to -> cudaFree ( void* devPtr )Frees memory on the device.
