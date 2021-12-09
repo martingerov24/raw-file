@@ -3,6 +3,7 @@
 #include <vector>
 #include <assert.h>
 #include <string>
+#include <chrono>
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
@@ -33,7 +34,7 @@ __global__ void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int i, i
 	{
 		int calc = i * width + c;  //their scope is threadLifeTime
 		uint8_t n = 0;
-		Color(d_Data[height - calc -1], n);
+		Color(d_Data[calc], n);
 		//h   !w
 		short idx = (i & 1) + !(c & 1);
 		cpy_Data[3 * calc + 0] = 0;//r
@@ -103,12 +104,16 @@ bool IfFileCanOpen(const char* fileName, const std::string width, const std::str
 }
 int main(int argc, char** argv)
 {
+	auto start = std::chrono::high_resolution_clock::now();
 	char* fileName = "fileToRead.raw";
 	int width = 3840, height = 1920;
 	uint16_t* data = ReadingFiles(fileName, height, width);// reading the files
 	uint8_t* cpuData;
 	cpuData = GetCudaRdy(data, height, width);
 	outPutFile(cpuData, height, width);// ofstreaming the files
+	auto end = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	printf("%d -> is the time measured", duration);
 	return 0;
 }
 
