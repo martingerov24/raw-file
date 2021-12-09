@@ -1,4 +1,4 @@
-#define THREADS_PER_BLOCK 512
+#define THREADS_PER_BLOCK 1024
 #include <stdio.h>
 #include <vector>
 #include <assert.h>
@@ -29,14 +29,20 @@ void Color(uint16_t number, uint8_t& n)
 __global__ void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int i, int height)
 {
 	//3840 1920
-	int c = blockIdx.x * blockDim.x + threadIdx.x; //c is coresponding to j(width in the for loop)
-	if (c < width || c >= 0)
+	int blockId = blockIdx.x * blockDim.x * blockDim.y
+		+ threadIdx.y * blockDim.x + threadIdx.x;
+
+
+	int x = blockIdx.x * blockDim.x + threadIdx.x; //c is coresponding to j(width in the for loop)
+	int y = blockIdx.y * blockDim.y * (i);
+	if (x < width || x >= 0 
+		|| y < height || y>=0)
 	{
-		int calc = i * width + c;  //their scope is threadLifeTime
+		int calc = y * width + x;  //their scope is threadLifeTime
 		uint8_t n = 0;
 		Color(d_Data[calc], n);
 		//h   !w
-		short idx = (i & 1) + !(c & 1);
+		short idx = (y & 1) + !(x & 1);
 		cpy_Data[3 * calc + 0] = 0;//r
 		cpy_Data[3 * calc + 1] = 0;//g
 		cpy_Data[3 * calc + 2] = 0;//b
@@ -67,10 +73,10 @@ uint8_t* GetCudaRdy(uint16_t*& data, const int& height, const int& width)
 
 	cudaStatus = cudaMemcpy(cpyData, h_cpy, sizeof(uint8_t) * size * 3, cudaMemcpyHostToDevice);
 	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");// here i am actually not in need to transfer data, but i wanted to see if it makes difference
-	dim3 sizeOfBlock(ceilf(width >> 9)); // 4
 	dim3 totalThreads(THREADS_PER_BLOCK);
+	dim3 sizeOfBlock(ceilf(width / 1024), 1000); // 4 , 2
 
-	for (int i = 0; i < height; i++)
+	for (int i = 1; i <= ceilf(height/1000); i++)
 	{
 		Checker << <sizeOfBlock, totalThreads >> > (d_data, cpyData, width, i, height);
 	}
