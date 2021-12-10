@@ -28,11 +28,10 @@ void Color(uint16_t number, uint8_t& n)
 
 __global__ void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int height)
 {
-	//3840 1920
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y; 
-	if (x < width || x >= 0 
-		|| y < height || y>=0)
+	if (x < width && x >= 0 
+		&& y < height && y>=0)
 	{
 		int calc = y * width + x;  //their scope is threadLifeTime
 		uint8_t n = 0;
@@ -71,15 +70,13 @@ void GetCudaRdy(std::vector<uint8_t> &h_cpy, const std::vector<uint16_t>& data, 
 
 	cudaStatus = cudaMemcpyAsync(cpyData, h_cpy.data(), sizeof(uint8_t) * size * 3, cudaMemcpyHostToDevice);
 	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");// here i am actually not in need to transfer data, but i wanted to see if it makes difference
-	dim3 totalThreads(THREADS_PER_BLOCK);
-	dim3 sizeOfBlock((width / totalThreads.x), height); // 4 , 2
+	dim3 sizeOfBlock(((width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height); // 4 , 2
 
-	Checker << <sizeOfBlock, totalThreads >> > (d_data, cpyData, width, height);
+	Checker << <sizeOfBlock, THREADS_PER_BLOCK >> > (d_data, cpyData, width, height);
 
 	cudaStatus = cudaMemcpyAsync(h_cpy.data(), cpyData, sizeof(uint8_t) * size * 3, cudaMemcpyDeviceToHost);
 	//cudaStatus = cudaStreamSynchronize();
 	cudaStatus = cudaDeviceSynchronize();
-	printf("%d == %d\n", sizeof(d_data), sizeof(data));
 	
 	auto end = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
