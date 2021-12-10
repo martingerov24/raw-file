@@ -8,8 +8,8 @@
 #include "device_launch_parameters.h"
 
 //------------------------------------------------Predifining Functions
-uint16_t* ReadingFiles(char* fileName, int& height, int& width);
-void outPutFile(uint8_t*& pixelData, int height, int width);
+std::vector<uint16_t> ReadingFiles(char* fileName, int& height, int& width);
+void outPutFile(std::vector<uint8_t> pixelData, int height, int width);
 //------------------------------------------------Color operations
 __device__
 void Color(uint16_t number, uint8_t& n)
@@ -26,15 +26,11 @@ void Color(uint16_t number, uint8_t& n)
 	// the second number is our putput
 }
 
-__global__ void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int i, int height)
+__global__ void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int height)
 {
 	//3840 1920
-	int blockId = blockIdx.x * blockDim.x * blockDim.y
-		+ threadIdx.y * blockDim.x + threadIdx.x;
-
-
-	int x = blockIdx.x * blockDim.x + threadIdx.x; //c is coresponding to j(width in the for loop)
-	int y = blockIdx.y * blockDim.y * (i);
+	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
+	int y = (blockIdx.y * blockDim.y) + threadIdx.y; 
 	if (x < width || x >= 0 
 		|| y < height || y>=0)
 	{
@@ -51,42 +47,47 @@ __global__ void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int i, i
 }
 
 __host__
-uint8_t* GetCudaRdy(uint16_t*& data, const int& height, const int& width)
+void GetCudaRdy(std::vector<uint8_t> &h_cpy, const std::vector<uint16_t>& data, const int& height, const int& width)
 {
 	uint16_t* d_data;
 	cudaError_t cudaStatus = cudaError_t(0);
 	int size = height * width;
-	uint8_t* h_cpy = new uint8_t[width * height * 3];
+	//uint8_t* h_cpy = new uint8_t[width * height * 3];
 	uint8_t* cpyData;
 
 	cudaStatus = cudaSetDevice(0);
 	assert(cudaStatus == cudaSuccess, "you do not have cuda capable device!");
 
-	cudaStatus = cudaMalloc((void**)&d_data, sizeof(uint16_t) * size);
+	cudaStatus = cudaMalloc((void**)&d_data, data.size() * sizeof(uint16_t));//sizeof(uint16_t) * size
 	assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
 
-	cudaStatus = cudaMalloc((void**)&cpyData, sizeof(uint8_t) * size * 3);
+	cudaStatus = cudaMalloc((void**)&cpyData, sizeof(uint8_t) * h_cpy.size() * 3);
 	assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
-
-	cudaStatus = cudaMemcpy(d_data, data, sizeof(uint16_t) * size, cudaMemcpyHostToDevice);
+	// learn to get stram and make the function async
+	auto start = std::chrono::high_resolution_clock::now();
+	
+	cudaStatus = cudaMemcpyAsync(d_data, data.data(), sizeof(uint16_t) * size, cudaMemcpyHostToDevice);
 	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
 
-	cudaStatus = cudaMemcpy(cpyData, h_cpy, sizeof(uint8_t) * size * 3, cudaMemcpyHostToDevice);
+	cudaStatus = cudaMemcpyAsync(cpyData, h_cpy.data(), sizeof(uint8_t) * size * 3, cudaMemcpyHostToDevice);
 	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");// here i am actually not in need to transfer data, but i wanted to see if it makes difference
 	dim3 totalThreads(THREADS_PER_BLOCK);
-	dim3 sizeOfBlock(ceilf(width / 1024), 1000); // 4 , 2
+	dim3 sizeOfBlock((width / totalThreads.x), height); // 4 , 2
 
-	for (int i = 1; i <= ceilf(height/1000); i++)
-	{
-		Checker << <sizeOfBlock, totalThreads >> > (d_data, cpyData, width, i, height);
-	}
+	Checker << <sizeOfBlock, totalThreads >> > (d_data, cpyData, width, height);
 
+	cudaStatus = cudaMemcpyAsync(h_cpy.data(), cpyData, sizeof(uint8_t) * size * 3, cudaMemcpyDeviceToHost);
+	//cudaStatus = cudaStreamSynchronize();
 	cudaStatus = cudaDeviceSynchronize();
-	delete[] data;
-	cudaStatus = cudaMemcpy(h_cpy, cpyData, sizeof(uint8_t) * size * 3, cudaMemcpyDeviceToHost);
+	printf("%d == %d\n", sizeof(d_data), sizeof(data));
+	
+	auto end = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	printf("%d -> is the time measured", duration);
+
 	cudaFree(cpyData);
 	cudaFree(d_data);// it was said to -> cudaFree ( void* devPtr )Frees memory on the device.
-	return h_cpy;
+	return;
 }
 
 bool IfFileCanOpen(const char* fileName, const std::string width, const std::string height) {
@@ -110,33 +111,32 @@ bool IfFileCanOpen(const char* fileName, const std::string width, const std::str
 }
 int main(int argc, char** argv)
 {
-	auto start = std::chrono::high_resolution_clock::now();
 	char* fileName = "fileToRead.raw";
 	int width = 3840, height = 1920;
-	uint16_t* data = ReadingFiles(fileName, height, width);// reading the files
-	uint8_t* cpuData;
-	cpuData = GetCudaRdy(data, height, width);
-	outPutFile(cpuData, height, width);// ofstreaming the files
-	auto end = std::chrono::high_resolution_clock::now();
-	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	printf("%d -> is the time measured", duration);
+	const std::vector<uint16_t> &data = ReadingFiles(fileName, height, width);// reading the 
+
+	std::vector<uint8_t> h_cpy;
+	h_cpy.resize(width * height * 3);
+
+	GetCudaRdy(h_cpy, data, height, width);
+	outPutFile(h_cpy, height, width);// ofstreaming the files
 	return 0;
 }
 
-uint16_t* ReadingFiles(char* fileName, int& height, int& width)
+std::vector<uint16_t> ReadingFiles(char* fileName, int& height, int& width)
 {
 	FILE* rdFile = fopen(fileName, "rb+");
-	uint16_t* data = nullptr;
+	std::vector<uint16_t> data;
 	if (rdFile == 0) {
 		printf("no file found!");
 		return data; 
 	}
-	data = new uint16_t[height * width];
+	data.resize(height * width);
 	fread(reinterpret_cast<char*>(&data[0]), 2, height * width, rdFile);
 	fclose(rdFile);
 	return data;
 }
-void outPutFile(uint8_t*& pixelData, int height, int width)
+void outPutFile(std::vector<uint8_t> pixelData, int height, int width)
 {
 	FILE* fileWr;
 	fileWr = fopen("writingFile.ppm", "w+");
