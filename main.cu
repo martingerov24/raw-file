@@ -1,3 +1,4 @@
+
 #define THREADS_PER_BLOCK 1024
 #include <stdio.h>
 #include <vector>
@@ -7,9 +8,15 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
+#include <GLFW/glfw3.h>
+#include "imgui/imgui.h"
+#include "imgui/backends/imgui_impl_glfw.h"
+#include "imgui/backends/imgui_impl_opengl3.h"
+#include <iostream>
 //------------------------------------------------Predifining Functions
 std::vector<uint16_t> ReadingFiles(char* fileName, int& height, int& width);
 void outPutFile(std::vector<uint8_t> pixelData, int height, int width);
+void Loop(std::vector<uint8_t> pixelData, int height, int width);
 //------------------------------------------------Color operations
 __device__
 void Color(uint16_t number, uint8_t& n)
@@ -44,18 +51,20 @@ __global__ void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int heig
 		cpy_Data[3 * calc + idx] = n;
 	}
 }
-
+//TODO::clean up the code, imo create a class for opengl and split the GetCudaRdy to more functions
 __host__
 void GetCudaRdy(std::vector<uint8_t> &h_cpy, const std::vector<uint16_t>& data, const int& height, const int& width)
 {
-	uint16_t* d_data;
-	cudaError_t cudaStatus = cudaError_t(0);
 	int size = height * width;
-	//uint8_t* h_cpy = new uint8_t[width * height * 3];
+	cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
+	uint16_t* d_data;
 	uint8_t* cpyData;
 
+	cudaStream_t stream;
+	cudaError_t cudaStatus = cudaError_t(0);
 	cudaStatus = cudaSetDevice(0);
 	assert(cudaStatus == cudaSuccess, "you do not have cuda capable device!");
+	cudaStatus = cudaStreamCreate(&stream);
 
 	cudaStatus = cudaMalloc((void**)&d_data, data.size() * sizeof(uint16_t));//sizeof(uint16_t) * size
 	assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
@@ -65,18 +74,18 @@ void GetCudaRdy(std::vector<uint8_t> &h_cpy, const std::vector<uint16_t>& data, 
 	// learn to get stram and make the function async
 	auto start = std::chrono::high_resolution_clock::now();
 	
-	cudaStatus = cudaMemcpyAsync(d_data, data.data(), sizeof(uint16_t) * size, cudaMemcpyHostToDevice);
+	cudaStatus = cudaMemcpyAsync(d_data, data.data(), sizeof(uint16_t) * size, cudaMemcpyHostToDevice, stream);
 	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
 
-	cudaStatus = cudaMemcpyAsync(cpyData, h_cpy.data(), sizeof(uint8_t) * size * 3, cudaMemcpyHostToDevice);
+	cudaStatus = cudaMemcpyAsync(cpyData, h_cpy.data(), sizeof(uint8_t) * size * 3, cudaMemcpyHostToDevice, stream);
 	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");// here i am actually not in need to transfer data, but i wanted to see if it makes difference
 	dim3 sizeOfBlock(((width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height); // 4 , 2
 
-	Checker << <sizeOfBlock, THREADS_PER_BLOCK >> > (d_data, cpyData, width, height);
+	Checker << <sizeOfBlock, THREADS_PER_BLOCK, 0, stream >> > (d_data, cpyData, width, height);
 
-	cudaStatus = cudaMemcpyAsync(h_cpy.data(), cpyData, sizeof(uint8_t) * size * 3, cudaMemcpyDeviceToHost);
-	//cudaStatus = cudaStreamSynchronize();
-	cudaStatus = cudaDeviceSynchronize();
+	cudaStatus = cudaMemcpyAsync(h_cpy.data(), cpyData, sizeof(uint8_t) * size * 3, cudaMemcpyDeviceToHost, stream);
+	cudaStatus = cudaStreamSynchronize(stream);
+	//cudaStatus = cudaDeviceSynchronize();
 	
 	auto end = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -84,7 +93,7 @@ void GetCudaRdy(std::vector<uint8_t> &h_cpy, const std::vector<uint16_t>& data, 
 
 	cudaFree(cpyData);
 	cudaFree(d_data);// it was said to -> cudaFree ( void* devPtr )Frees memory on the device.
-	return;
+	cudaStreamDestroy(stream);
 }
 
 bool IfFileCanOpen(const char* fileName, const std::string width, const std::string height) {
@@ -106,7 +115,13 @@ bool IfFileCanOpen(const char* fileName, const std::string width, const std::str
 	}
 	return true;
 }
-int main(int argc, char** argv)
+void guiClearColor()
+{
+	glfwPollEvents();
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+}
+int main()
 {
 	char* fileName = "fileToRead.raw";
 	int width = 3840, height = 1920;
@@ -132,6 +147,72 @@ std::vector<uint16_t> ReadingFiles(char* fileName, int& height, int& width)
 	fread(reinterpret_cast<char*>(&data[0]), 2, height * width, rdFile);
 	fclose(rdFile);
 	return data;
+}
+
+void Loop(std::vector<uint8_t> pixelData, int height, int width)
+{
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	if (!glfwInit()) {
+		throw "glfwInit() FAILED!";
+	}
+
+	GLFWwindow* window = glfwCreateWindow(640, 480, "My Title", NULL, NULL);
+
+	if (!window) {
+		glfwTerminate();
+		throw "no window created";
+	}
+
+	glfwMakeContextCurrent(window);
+	glfwSwapInterval(1);
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init("#version 330");
+
+	bool is_show = true;
+	bool oneImage = false;
+	bool twoImages = false;
+	GLuint texture;
+	while (!glfwWindowShouldClose(window))
+	{
+		glfwPollEvents();
+		glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		// feed inputs to dear imgui, start new frame
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+
+		// rendering our geometries
+
+		// render your GUI
+		ImGui::Begin("Demo window");
+		ImGui::Button("Hello!");
+		ImGui::End();
+
+		// Render dear imgui into screen
+		ImGui::Render();
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+		int display_w, display_h;
+		glfwGetFramebufferSize(window, &display_w, &display_h);
+		glViewport(0, 0, display_w, display_h);
+		glfwSwapBuffers(window);
+	}
+
+	ImGui_ImplGlfw_Shutdown();
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui::DestroyContext();
+	glfwTerminate();
+
+	glfwDestroyWindow(window);
 }
 void outPutFile(std::vector<uint8_t> pixelData, int height, int width)
 {
