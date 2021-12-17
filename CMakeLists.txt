@@ -5,6 +5,11 @@ project(file_reading_cuda LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+#-----------OpenCV Dependancies---------
+find_package(OpenCV CONFIG REQUIRED PATHS D:/marting/opencv-feature-matching/opencv/Build/install) 
+set(OPENCV_LIBS opencv_core454 opencv_highgui454 opencv_videoio454 opencv_imgcodecs454 opencv_imgproc454 opencv_video454 opencv_xfeatures2d454 opencv_features2d454 opencv_cudafeatures2d454 opencv_calib3d454)
+
+ 
 #-----------imgui Dependencies----------
 set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/imgui")
 set(IMGUI_SOURCES
@@ -48,12 +53,15 @@ set(SOURCES
 
 add_executable(file_reading_cuda ${SOURCES})
 
+message(STATUS "====== OpenCV Located: ${OPENCV_PATH}")
+message(STATUS "====== OpenCV LIBS: ${OpenCV_LIBS}")
 message(STATUS "====== CUDA Located: ${CUDA_INCLUDE_DIRS}")
 message(STATUS "====== IMGUI Located: ${IMGUI_DIR}")
 message(STATUS "====== OpenGL Located: ${OPENGL_LIBRARIES}")
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     ${CUDA_INCLUDE_DIRS}
+	${OpenCV_INCLUDE_DIRS}
 	"${GLAD_DIR}/include"
     "${GLFW_DIR}/include"
     "${IMGUI_DIR}"
@@ -64,6 +72,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 	glad
     glfw
     ${OPENGL_LIBRARIES}
+    ${OpenCV_LIBS}
     ${CUDA_LIBS}
     ${CMAKE_DL_LIBS}
 )
