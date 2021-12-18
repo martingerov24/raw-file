@@ -6,8 +6,8 @@ struct descriptor_t {
 };
 
 /*constexpr uint64_t NUM_KPTS = 8192; */// limit of pva implementation of harris corner detection
-using keypoints_t = std::vector<float2>;
-using descriptors_t = std::vector<descriptor_t>;
+//using keypoints_t = std::vector<float2>;
+//using descriptors_t = std::vector<descriptor_t>;
 
 __device__ const int d_ref_pat[4 * 256] = {
 	8,   -3,  9,   5,   4,   2,   7,   -12, -11, 9,   -8,  2,   7,   -12, 12,  -13, 2,   -13, 2,   12,  1,   -7,  1,
@@ -61,7 +61,6 @@ __global__ void brief_kernel(uint8_t* __restrict__ descriptors, const float2* __
 	const uint8_t* __restrict__ image, uint16_t x_res, uint16_t y_res) {
 	// blockidx.x is the feature index (one block per feature)
 	// threadidx.x is the index of the byte within a descriptor (32 * 8bit)
-
 	const int32_t x = __float2int_rn(keypoints[blockIdx.x].x);
 	const int32_t y = __float2int_rn(keypoints[blockIdx.x].y);
 
@@ -84,19 +83,10 @@ __global__ void brief_kernel(uint8_t* __restrict__ descriptors, const float2* __
 	descriptors[blockIdx.x * 32 + threadIdx.x] = v;
 }
 
-void CudaKeypoints::Kernel(uint8_t* __restrict__ descriptors, const float2* __restrict__ keypoints,
-	const uint8_t* __restrict__ image, uint16_t x_res, uint16_t y_res)
+void CudaKeypoints::Kernel()
 {
-	cudaStatus = cudaMemcpyAsync(d_data, data.data(), sizeof(uint16_t) * size, cudaMemcpyHostToDevice, stream);
-	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
-
-	cudaStatus = cudaMemcpyAsync(cpyData, h_cpy.data(), sizeof(uint8_t) * size * 3, cudaMemcpyHostToDevice, stream);
-	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");// here i am actually not in need to transfer data, but i wanted to see if it makes difference
 	dim3 sizeOfBlock(((width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height); // 4 , 2
 
-	brief_kernel << <sizeOfBlock, THREADS_PER_BLOCK, 0, stream >> > (descriptors, keypoints
-		, image, x_res, y_res);
-
-	cudaStatus = cudaMemcpyAsync(h_cpy.data(), cpyData, sizeof(uint8_t) * size * 3, cudaMemcpyDeviceToHost, stream);
-
+	brief_kernel << <sizeOfBlock, THREADS_PER_BLOCK, 0, stream >> > (d_result, d_kp
+		, d_image, width, height);
 }

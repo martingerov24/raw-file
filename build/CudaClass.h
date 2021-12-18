@@ -11,8 +11,14 @@
 class CudaKeypoints
 {
 public:
-	CudaKeypoints(float2* keypoints, std::vector<uint8_t> data, uint8_t*& d_desc,float2*& d_keypoints, int& width, int &height)
-		:keypoints(keypoints), d_keypoints(d_keypoints), height(height), width(width)
+	CudaKeypoints(std::vector<uint8_t>& h_result, const float2* keypoints, const std::vector<uint8_t>& data,
+		const int height, const int width, uint8_t* d_image, uint8_t* d_result, float2* d_kp, int sizeOfKeypoints)
+		
+		: h_result(h_result), keypoints(keypoints)
+		, img(data), height(height)
+		, width(width), d_image(d_image)
+		, d_result(d_result), d_kp(d_kp)
+		, sizeofKeypoints(sizeOfKeypoints)
 	{
 		cudaStatus = cudaError_t(0);
 		size = height * width;
@@ -25,16 +31,36 @@ public:
 	__host__
 		void startup(int size)
 	{
-		cudaStatus = cudaMalloc((void**)&d_keypoints, size * sizeof(uint8_t));//sizeof(uint16_t) * size
+		cudaStatus = cudaMalloc((void**)&d_image, img.size() * sizeof(uint8_t));//sizeof(uint16_t) * size
 		assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
 
-		cudaStatus = cudaMalloc((void**)&d_desc, sizeof(uint8_t) * size);
+		cudaStatus = cudaMalloc((void**)&d_result, sizeof(uint8_t) * h_result.size());
+		assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
+
+		cudaStatus = cudaMalloc((void**)&d_kp, sizeof(float) * sizeofKeypoints);
 		assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
 	}
-	__host__
-	void Kernel(uint8_t* __restrict__ descriptors, const float2* __restrict__ keypoints,
-			const uint8_t* __restrict__ image, uint16_t x_res, uint16_t y_res);
 
+	__host__
+	void Kernel();
+
+	__host__
+		void cudaKernel()
+	{
+		cudaStatus = cudaMemcpyAsync(d_image, img.data(), sizeof(uint8_t) * size, cudaMemcpyHostToDevice, stream);
+		assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
+
+		cudaStatus = cudaMemcpyAsync(d_kp, keypoints, sizeof(float2) * size, cudaMemcpyHostToDevice, stream);
+		assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
+
+		Kernel();
+	}
+	__host__
+		void cudaMemcpyD2H()
+	{
+		cudaStatus = cudaMemcpyAsync(h_result.data(), d_result, sizeof(uint8_t) * size, cudaMemcpyDeviceToHost, stream);
+		assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
+	}
 	__host__
 		void sync()
 	{
@@ -44,18 +70,23 @@ public:
 	__host__
 		~CudaKeypoints()
 	{
-		cudaFree(d_desc);
-		cudaFree(d_keypoints);// it was said to -> cudaFree ( void* devPtr )Frees memory on the device.
+		cudaFree(d_image);
+		cudaFree(d_result);// it was said to -> cudaFree ( void* devPtr )Frees memory on the device.
+		cudaFree(d_kp);
 		cudaStreamDestroy(stream);
 	}
 private:
-	uint8_t* &d_desc;
-	float2*& d_keypoints;
-
-	float2* &keypoints;
-	const std::vector<uint8_t>& img; 
-	const int& height, & width;
-	int size;
+	//-------Provided By Main-------
+	std::vector<uint8_t>& h_result;
+	const float2* &keypoints;
+	const std::vector<uint8_t>& img;
+	const int height, width;
+	int size; int sizeofKeypoints;
+	//------Provided By Class,------
+	//should be deleted after using
+	uint8_t* &d_image;
+	uint8_t* &d_result;
+	float2* &d_kp;
 	cudaStream_t stream;
 	cudaError_t cudaStatus;
 };

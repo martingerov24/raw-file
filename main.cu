@@ -6,13 +6,19 @@
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
-#include "build/CudaClass.h"
+
+#include "cuda_runtime.h"
+#include "cuda/std/cmath"
+#include "device_launch_parameters.h"
 
 #include "opencv2/core.hpp"
+#include "opencv2/opencv.hpp"
 #include <opencv2/calib3d.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc/imgproc.hpp> 
+#include "build/CudaClass.h"
+
 
 std::vector<float> keypoints =
 {
@@ -534,16 +540,19 @@ std::vector<float> keypoints =
 984.000000, 1024.000000,
 1102.000000, 1078.000000,
 1104.000000, 1077.000000 };
-
-std::vector<uint8_t> laod(std::string filePath, int& width, int& height)
+void laod(std::vector<uint8_t> &image,  int& width, int& height)
 {
-	std::vector<uint8_t> image;
-	filePath = cv::samples::findFile(filePath, true, false);
-	cv::Mat img(width, height, 0);
-	cv::imread(filePath, cv::IMREAD_GRAYSCALE);
+	cv::Mat img = cv::imread("C:/Users/marting/Pictures/feature-matching/cathedral.jpg", cv::IMREAD_GRAYSCALE);
+	if (img.empty())
+	{
+		throw "no ellements in cv::Mat buffer";
+	}
 	image.assign(img.begin<uint8_t>(), img.end<uint8_t>());
 	img.deallocate();
-	return image;
+	if (image.empty())
+	{
+		throw "vector is not filled with ellements";
+	}
 }
 
 std::vector<uint16_t> ReadingFiles(char* fileName, int& height, int& width);
@@ -631,32 +640,37 @@ void Loop(std::vector<uint8_t>& h_cpy, const std::vector<uint16_t>& data, const 
 	ImGui::DestroyContext();
 	glfwTerminate();
 	glfwDestroyWindow(window);
-	cuda.~Cuda();
 }
 
-void LoopForKeypoints(std::vector<uint8_t>& h_cpy, const std::vector<uint8_t>& data, const int& height, const int& width)
+void Keypoints(std::vector<uint8_t>& h_result, const std::vector<uint8_t>& data, const int height, const int width)
 {
 	int size = height * width;
-	uint8_t* d_Data;
-	uint8_t* cpyData;
-	uint8_t* desc;
-	CudaKeypoints cuda(h_cpy, data, height, width, d_Data, cpyData);
+	h_result.resize(size);
+	uint8_t* d_image;
+	uint8_t* d_result;
+	float2* d_kp;
+	// have taken care of those pointers in my class, they were used for the kernel
+	CudaKeypoints cuda(h_result, (float2*)keypoints.data(), data, height, width , d_image, d_result, d_kp, keypoints.size());
 	cuda.startup(size);
-
-	cuda.Kernel(desc, (float2*)keypoints.data(), data.data(), width, height);
-	cuda.~CudaKeypoints();
+	cuda.cudaKernel();
+	cuda.cudaMemcpyD2H();
+	cuda.sync();
+	delete[] d_image;
+	delete[] d_result;
+	delete[] d_kp;
 }
 int main()
 {
-	//std::string fileName = "C:/Users/marting/Pictures/cuda/images.jpg";
-	char* fileName = "fileToRead.raw";
-	int width = 3840, height = 1920;
-	//const std::vector<uint8_t> &data = laod(fileName, height, width);// data = radingFiles, if you want to read raw File, and must change to uint16_t
-	const std::vector<uint16_t> &data = ReadingFiles(fileName, height, width);// data = radingFiles, if you want to read raw File, and must change to uint16_t
+	//char* fileName = "fileToRead.raw";
+	int width = 1920, height = 1200;
+	//int width = 3840, height = 1920;
+	std::vector<uint8_t> data;
+	laod(data, height, width);
+	//const std::vector<uint16_t> &data = ReadingFiles(fileName, height, width);// data = radingFiles, if you want to read raw File, and must change to uint16_t
 	std::vector<uint8_t> h_cpy;
-	h_cpy.resize(width * height * 3);
 
-	Loop(h_cpy, data, height, width);
+	//Loop(h_cpy, data, height, width);
+	Keypoints(h_cpy, data, height, width);
 	return 0;
 }
 
