@@ -18,7 +18,7 @@ uint8_t Color(uint16_t number)
 }
 
 __global__
-void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int height)
+void Checker(uint16_t* __restrict__ d_Data, uint8_t* __restrict__ cpy_Data, int width, int height)
 {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;

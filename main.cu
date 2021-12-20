@@ -12,7 +12,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "build/stb_image.h"
 //#define STB_IMAGE_RESIZE_IMPLEMENTATION
-//#include "build/stb_image_resize.h"	
+//#include "build/stb_image_resize.h"
 #include "build/CudaClass.h"
 
 const std::vector<uint8_t> result = 
@@ -1186,8 +1186,8 @@ void KeypointTest()
 }
 int main()
 {
-	//RawFileConverter();
-	KeypointTest();
+	RawFileConverter();
+	//KeypointTest();
 	return 0;
 }
 

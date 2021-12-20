@@ -1,5 +1,5 @@
 #pragma once
-#define THREADS_PER_BLOCK 1034
+#define THREADS_PER_BLOCK 1024
 #include "cuda_runtime.h"
 #include "cuda/std/cmath"
 #include "device_launch_parameters.h"
@@ -605,11 +605,6 @@ private:
 	cudaStream_t stream;
 	cudaError_t cudaStatus;
 };
-
-
-
-
-
 
 class Cuda
 {
