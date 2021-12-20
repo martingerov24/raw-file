@@ -1,8 +1,9 @@
 #include "CudaClass.h"
 
-__device__
-void Color(uint16_t number, uint8_t& n)
+__device__ __forceinline__
+uint8_t Color(uint16_t number)
 {
+	uint8_t n;
 	// this is the solution if little indian
 	uint8_t first_8_bits = number & 0b11111111; first_8_bits = first_8_bits >> 4;
 	number = number >> 8;
@@ -13,6 +14,7 @@ void Color(uint16_t number, uint8_t& n)
 	n = n << 4;
 	n |= first_8_bits;
 	// the second number is our putput
+	return n;
 }
 
 __global__
@@ -24,14 +26,15 @@ void Checker(uint16_t* d_Data, uint8_t* cpy_Data, int width, int height)
 		&& y < height && y >= 0)
 	{
 		int calc = y * width + x;  //their scope is threadLifeTime
-		uint8_t n = 0;
-		Color(d_Data[calc], n);
+		uint8_t n = Color(d_Data[calc]);
 		//h   !w
 		short idx = (y & 1) + !(x & 1);
-		cpy_Data[3 * calc + 0] = 0;//r
-		cpy_Data[3 * calc + 1] = 0;//g
-		cpy_Data[3 * calc + 2] = 0;//b
-		cpy_Data[3 * calc + idx] = n;
+		uint8_t rgb[3] = { 0,0,0 };
+		rgb[idx] = n;
+
+		cpy_Data[3 * calc + 0] = rgb[0];
+		cpy_Data[3 * calc + 1] = rgb[1];
+		cpy_Data[3 * calc + 2] = rgb[2];
 	}
 }
 
@@ -41,15 +44,11 @@ void Cuda::rawValue()
 	cudaStatus = cudaMemcpyAsync(d_data, data.data(), sizeof(uint16_t) * size, cudaMemcpyHostToDevice, stream);
 	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
 
-	cudaStatus = cudaMemcpyAsync(cpyData, h_cpy.data(), sizeof(uint8_t) * size * 3, cudaMemcpyHostToDevice, stream);
-	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");// here i am actually not in need to transfer data, but i wanted to see if it makes difference
-	dim3 sizeOfBlock(((width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height); // 4 , 2
+	dim3 sizeOfBlock(((width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height);
 
 	Checker << <sizeOfBlock, THREADS_PER_BLOCK, 0, stream >> > (d_data, cpyData, width, height);
+	auto status = cudaGetLastError();
 
 	cudaStatus = cudaMemcpyAsync(h_cpy.data(), cpyData, sizeof(uint8_t) * size * 3, cudaMemcpyDeviceToHost, stream);
-
-	/*auto end = std::chrono::high_resolution_clock::now();
-	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	printf("%d -> is it working?", duration);*/
+	assert(cudaStatus == cudaSuccess, "not able to transfer device to host!");
 }

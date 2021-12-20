@@ -85,8 +85,6 @@ __global__ void brief_kernel(uint8_t* __restrict__ descriptors, const float2* __
 
 void CudaKeypoints::Kernel()
 {
-	dim3 sizeOfBlock(((width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height); // 4 , 2
-
-	brief_kernel << <sizeOfBlock, THREADS_PER_BLOCK, 0, stream >> > (d_result, d_kp
+	brief_kernel << < keypointSize, 32, 0, stream >> > (d_result, d_kp
 		, d_image, width, height);
 }

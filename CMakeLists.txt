@@ -1,13 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(file_reading_cuda LANGUAGES CXX CUDA)
+set(TOOLKIT_ROOT_DIR $ENV{CUDA_PATH})
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #-----------OpenCV Dependancies---------
-find_package(OpenCV CONFIG REQUIRED PATHS D:/marting/opencv-feature-matching/opencv/Build/install) 
-set(OPENCV_LIBS opencv_core454 opencv_highgui454 opencv_videoio454 opencv_imgcodecs454 opencv_imgproc454 opencv_video454 opencv_xfeatures2d454 opencv_features2d454 opencv_cudafeatures2d454 opencv_calib3d454)
+set(OPENCV_DIR D:/marting/opencv-feature-matching/opencv/Build/install)
+find_package(OpenCV CONFIG REQUIRED PATHS ${OPENCV_DIR}) 
+set(OpenCV_LIBS opencv_core454 opencv_highgui454 opencv_videoio454 opencv_imgcodecs454 opencv_imgproc454 opencv_video454 opencv_xfeatures2d454 opencv_features2d454 opencv_cudafeatures2d454 opencv_calib3d454)
 
  
 #-----------imgui Dependencies----------
@@ -49,6 +51,9 @@ add_subdirectory(${GLFW_DIR})
 set(SOURCES
 	main.cu
 	${IMGUI_SOURCES}
+	Keypoint.cu
+	CudaClass.h
+	Cuda.cu
 )
 
 add_executable(file_reading_cuda ${SOURCES})
@@ -67,7 +72,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     "${IMGUI_DIR}"
     "${IMGUI_DIR}/backends" 
 )
-
+target_link_directories(${PROJECT_NAME} PRIVATE
+	${OPENCV_DIR}/x64/vc16/lib
+)
 target_link_libraries(${PROJECT_NAME} PUBLIC
 	glad
     glfw
