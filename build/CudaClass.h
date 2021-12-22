@@ -542,7 +542,7 @@ public:
 		size = height * width;
 		cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
 		cudaStatus = cudaSetDevice(0);
-		assert(cudaStatus == cudaSuccess, "you do not have cuda capable device!");
+		assert(cudaStatus == cudaSuccess && "you do not have cuda capable device!");
 		cudaStatus = cudaStreamCreate(&stream);
 	}
 
@@ -550,13 +550,13 @@ public:
 		void startup(int size)
 	{
 		cudaStatus = cudaMalloc((void**)&d_image, sizeof(uint8_t) * size);
-		assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
+		assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
 
 		cudaStatus = cudaMalloc((void**)&d_result, sizeof(uint8_t) * keypointSize);
-		assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
+		assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
 
 		cudaStatus = cudaMalloc((void**)&d_kp, sizeof(float) * keypointSize);
-		assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
+		assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
 	}
 
 	__host__
@@ -566,17 +566,17 @@ public:
 		void cudaMemcpy()
 	{
 		cudaStatus = cudaMemcpyAsync(d_image, img.data(), sizeof(uint8_t) * size, cudaMemcpyHostToDevice, stream);
-		assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
+		assert(cudaStatus == cudaSuccess && "not able to tansfer Data!");
 
 		cudaStatus = cudaMemcpyAsync(d_kp, (float2*)keypoints.data(), sizeof(float) * keypointSize, cudaMemcpyHostToDevice, stream);
-		assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
+		assert(cudaStatus == cudaSuccess && "not able to tansfer Data!");
 	}
 	__host__
 		void cudaMemcpyD2H(std::vector<uint8_t> &h_result)
 	{
 		h_result.resize(keypointSize);
 		cudaStatus = cudaMemcpyAsync(h_result.data(), d_result, sizeof(uint8_t) * keypointSize, cudaMemcpyDeviceToHost, stream);
-		assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
+		assert(cudaStatus == cudaSuccess && "not able to tansfer Data!");
 	}
 	__host__
 		void sync()
@@ -618,7 +618,7 @@ public:
 		size = height * width;
 		cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
 		cudaStatus = cudaSetDevice(0);
-		assert(cudaStatus == cudaSuccess, "you do not have cuda capable device!");
+		assert(cudaStatus == cudaSuccess && "you do not have cuda capable device!");
 		cudaStatus = cudaStreamCreate(&stream);
 	}
 	
@@ -626,10 +626,10 @@ public:
 		void startup(int size)
 	{
 		cudaStatus = cudaMalloc((void**)&d_data, size * sizeof(uint16_t));//sizeof(uint16_t) * size
-		assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
+		assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
 
 		cudaStatus = cudaMalloc((void**)&cpyData, sizeof(uint8_t) * size * 3);
-		assert(cudaStatus == cudaSuccess, "cudaMalloc failed!");
+		assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
 	}
 	__host__
 	void rawValue();

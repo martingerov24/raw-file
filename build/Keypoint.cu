@@ -1,10 +1,6 @@
 #include "CudaClass.h"
 #include <vector>
 
-struct descriptor_t {
-	uint64_t bits[4];
-};
-
 /*constexpr uint64_t NUM_KPTS = 8192; */// limit of pva implementation of harris corner detection
 //using keypoints_t = std::vector<float2>;
 //using descriptors_t = std::vector<descriptor_t>;
@@ -58,33 +54,49 @@ __device__ const int d_ref_pat[4 * 256] = {
 };
 
 __global__ void brief_kernel(uint8_t* __restrict__ descriptors, const float2* __restrict__ keypoints,
-	const uint8_t* __restrict__ image, uint16_t x_res, uint16_t y_res) {
+	const uint8_t* __restrict__ image, uint16_t x_res, uint16_t y_res, int32_t m_total_keypoints) {
 	// blockidx.x is the feature index (one block per feature)
 	// threadidx.x is the index of the byte within a descriptor (32 * 8bit)
-	const int32_t x = __float2int_rn(keypoints[blockIdx.x].x);
-	const int32_t y = __float2int_rn(keypoints[blockIdx.x].y);
+	int gthread_id = blockIdx.x * blockDim.x + threadIdx.x;
+	const int keypoint_idx = gthread_id >> 5;
+
+	/*__shared__ int sh[1024];
+	sh[threadIdx.x] = d_ref_pat[threadIdx.x];
+	__syncthreads();*/
+
+	if (keypoint_idx >= m_total_keypoints) {
+		return;
+	}
+
+	float2 kp = keypoints[keypoint_idx];
+	const int32_t x = __float2int_rn(kp.x);
+	const int32_t y = __float2int_rn(kp.y);
 
 	if (x < 13 || y < 13 || x > x_res - 13 || y > y_res - 13)
 		return;
 
+	//const int id = gthread_id % 32;
+	const int id = gthread_id & 0x1F;
 	uint8_t t0, t1, v = 0;
-	int32_t dx, dy;
+	int offset = id << 5;
+#pragma unroll
 	for (uint8_t k = 0; k < 8; ++k) {
-		dx = d_ref_pat[threadIdx.x * 32 + 4 * k];
-		dy = d_ref_pat[threadIdx.x * 32 + 4 * k + 1];
-		t0 = image[(x + dx) + (y + dy) * x_res];
-
-		dx = d_ref_pat[threadIdx.x * 32 + 4 * k + 2];
-		dy = d_ref_pat[threadIdx.x * 32 + 4 * k + 3];
-		t1 = image[(x + dx) + (y + dy) * x_res];
+		const int4 d = *(int4*)(&d_ref_pat[offset + 4 * k]);
+		t0 = image[(x + d.x) + (y + d.y) * x_res];
+		t1 = image[(x + d.z) + (y + d.w) * x_res];
 
 		v |= (t0 < t1) << k;
 	}
-	descriptors[blockIdx.x * 32 + threadIdx.x] = v;
+	descriptors[gthread_id] = v;
 }
 
 void CudaKeypoints::Kernel()
 {
-	brief_kernel << < keypointSize, 32, 0, stream >> > (d_result, d_kp
-		, d_image, width, height);
+	//dim3 sizeOfBlock(((keypointSize + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height);
+	const int numBlocks = (keypointSize + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+	brief_kernel << < numBlocks, THREADS_PER_BLOCK, 0, stream >> > (d_result, d_kp
+		, d_image, width, height, keypointSize);
+
+	/*brief_kernel << < keypointSize, 32, 0, stream >> > (d_result, d_kp
+		, d_image, width, height, keypointSize);*/
 }

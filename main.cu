@@ -14,6 +14,7 @@
 //#define STB_IMAGE_RESIZE_IMPLEMENTATION
 //#include "build/stb_image_resize.h"
 #include "build/CudaClass.h"
+#include <iostream>
 
 const std::vector<uint8_t> result = 
 {
@@ -1159,14 +1160,25 @@ void Keypoints_Result( const std::vector<uint8_t>& data, const int height, const
 	std::vector<uint8_t> h_result;
 	int size = height * width;
 	
+
 	CudaKeypoints cuda(data, height, width);
+	std::chrono::duration<double> global_time;
 	cuda.startup(size);
-	cuda.cudaMemcpy();
-	cuda.Kernel();
-	cuda.cudaMemcpyD2H(h_result);
-	cuda.sync();
-	std::string message = h_result == result ? "The result is: TRUE" : "Vectors not equal!";
-	printf("%s", message.c_str());
+	for (int i = 0; i < 10000; i++){
+		auto start = std::chrono::high_resolution_clock::now();
+		cuda.cudaMemcpy();
+		cuda.Kernel();
+		cuda.cudaMemcpyD2H(h_result);
+		cuda.sync();
+		auto end = std::chrono::high_resolution_clock::now();
+		global_time += end - start;
+		if (h_result != result){
+			std::string message = h_result == result ? "The result is: TRUE" : "Vectors not equal!";
+			printf("%s", message.c_str());
+			break;
+		}
+	}
+	printf("%d", std::chrono::duration_cast<std::chrono::milliseconds>(global_time).count());
 }
 
 void RawFileConverter()
@@ -1186,8 +1198,8 @@ void KeypointTest()
 }
 int main()
 {
-	RawFileConverter();
-	//KeypointTest();
+	//RawFileConverter();
+	KeypointTest();
 	return 0;
 }
 

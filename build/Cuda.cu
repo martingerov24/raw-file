@@ -42,7 +42,7 @@ void Cuda::rawValue()
 {
 	//auto start = std::chrono::high_resolution_clock::now();
 	cudaStatus = cudaMemcpyAsync(d_data, data.data(), sizeof(uint16_t) * size, cudaMemcpyHostToDevice, stream);
-	assert(cudaStatus == cudaSuccess, "not able to tansfer Data!");
+	assert(cudaStatus == cudaSuccess && "not able to tansfer Data!");
 
 	dim3 sizeOfBlock(((width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height);
 
@@ -50,5 +50,5 @@ void Cuda::rawValue()
 	auto status = cudaGetLastError();
 
 	cudaStatus = cudaMemcpyAsync(h_cpy.data(), cpyData, sizeof(uint8_t) * size * 3, cudaMemcpyDeviceToHost, stream);
-	assert(cudaStatus == cudaSuccess, "not able to transfer device to host!");
+	assert(cudaStatus == cudaSuccess && "not able to transfer device to host!");
 }

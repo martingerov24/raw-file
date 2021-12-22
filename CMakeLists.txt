@@ -83,3 +83,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     ${CUDA_LIBS}
     ${CMAKE_DL_LIBS}
 )
+target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+                       --generate-line-info
+                       --use_fast_math
+                       >)
