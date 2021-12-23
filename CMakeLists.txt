@@ -54,6 +54,7 @@ set(SOURCES
 	Keypoint.cu
 	CudaClass.h
 	Cuda.cu
+	match_kernel.cu
 )
 
 add_executable(file_reading_cuda ${SOURCES})
