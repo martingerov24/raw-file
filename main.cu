@@ -6273,10 +6273,15 @@ void KeypointTest()
 	if (!load(data, height, width,channels)){ throw "cannot load an image"; }
 	Keypoints_Result(data, height, width);
 }
+void MatchKernel()
+{
+
+}
 int main()
 {
 	//RawFileConverter();
-	KeypointTest();
+	//KeypointTest();
+	MatchKernel();
 	return 0;
 }
 

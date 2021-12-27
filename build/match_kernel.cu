@@ -68,13 +68,10 @@ void multi_match_kernel(const uint32_t* const __restrict__ query_descriptors,
 	__syncthreads();
 }
 
-
-void match_gpu_caller(const cudaStream_t& stream, const uint32_t* const query_descriptors,
-	const uint32_t* const train_descriptors, uint16_t* const best_idxs,
-	const uint16_t num_query_descriptors, const uint16_t num_train_descriptors) 
+__host__ void CudaKeypoints::match_gpu_caller(const cudaStream_t &providedStream, const int query, const int train)
 {
-	match_kernel << <num_query_descriptors / 32u + 1, 32, 0, stream >> > (query_descriptors, train_descriptors, best_idxs,
-		num_query_descriptors, num_train_descriptors);
+	match_kernel << <query / 32u + 1, 32, 0, stream >> > (d_query, d_train, d_resMatcher,
+		query, train);
 }
 
 //constexpr uint64_t NUM_KPTS = 8192;// limit of pva implementation of harris corner detection
