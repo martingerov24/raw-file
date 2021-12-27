@@ -1,4 +1,4 @@
-#include "CudaClass.h"
+#include "../../header/CudaClass.h"
 
 
 

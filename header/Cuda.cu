@@ -1,4 +1,4 @@
-#include "CudaClass.h"
+#include "../../header/CudaClass.h"
 
 __device__ __forceinline__
 uint8_t Color(uint16_t number)

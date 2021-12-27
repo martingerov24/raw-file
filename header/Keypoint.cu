@@ -1,4 +1,4 @@
-#include "CudaClass.h"
+#include "../../header/CudaClass.h"
 #include <vector>
 
 /*constexpr uint64_t NUM_KPTS = 8192; */// limit of pva implementation of harris corner detection
