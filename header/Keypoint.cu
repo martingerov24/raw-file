@@ -90,12 +90,12 @@ __global__ void brief_kernel(uint8_t* __restrict__ descriptors, const float2* __
 	descriptors[gthread_id] = v;
 }
 
-void CudaKeypoints::Kernel()
+void CudaKeypoints::Kernel(int kpSize)
 {
 	//dim3 sizeOfBlock(((keypointSize + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height);
-	const int numBlocks = (keypointSize + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+	const int numBlocks = (kpSize*32 + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 	brief_kernel << < numBlocks, THREADS_PER_BLOCK, 0, stream >> > (d_result, d_kp
-		, d_image, width, height, keypointSize);
+		, d_image, height, width, kpSize);
 
 	/*brief_kernel << < keypointSize, 32, 0, stream >> > (d_result, d_kp
 		, d_image, width, height, keypointSize);*/

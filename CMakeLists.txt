@@ -51,10 +51,13 @@ add_subdirectory(${GLFW_DIR})
 set(SOURCES
 	main.cu
 	${IMGUI_SOURCES}
-	Keypoint.cu
-	CudaClass.h
-	Cuda.cu
-	match_kernel.cu
+	header/Keypoint.cu
+	header/CudaClass.h
+	header/Cuda.cu
+	header/match_kernel.cu
+	header/stb_image.h
+	header/stb_image_resize.h
+	header/keypoints_Test.cpp
 )
 
 add_executable(file_reading_cuda ${SOURCES})
