@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <vector>
 #include <string>
+#include <chrono>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -130,28 +131,35 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 	std::vector<descriptor_t> train;
 
 	CudaKeypoints cuda(data, height, width);
-	std::chrono::duration<double> global_time;
-	cuda.startup(size, leftPoint.size()/2);
+	cuda.startup(size, leftPoint.size() / 2);
 
 	cuda.cudaUploadKeypoints(leftPoint);
-	cuda.Kernel(leftPoint.size()/2);
+	cuda.Kernel(leftPoint.size() / 2);
 	cuda.cudaMemcpyD2H(query, leftPoint.size() / 2);
 	cuda.sync(stream);
 
 	cuda.cudaUploadKeypoints(rightPoint);
-	cuda.Kernel(rightPoint.size()/2);
+	cuda.Kernel(rightPoint.size() / 2);
 	cuda.cudaMemcpyD2H(train, rightPoint.size() / 2);
 	cuda.sync(stream);
 
+	auto srt = std::chrono::high_resolution_clock::now();
+	auto end = std::chrono::high_resolution_clock::now();
+	auto time = end - srt;
 	cuda.MemoryAllocationAsync(stream, query, train);
-	cuda.MemcpyUploadAsyncForMatches(stream, query, train);
-	cuda.match_gpu_caller(stream, query.size(), train.size());
-	cuda.downloadAsync(stream, h_result, query.size()*2);
+	for (int i = 0; i < 1000; i++)
+	{
+		srt = std::chrono::high_resolution_clock::now();
+		cuda.MemcpyUploadAsyncForMatches(stream, query, train);
+		cuda.match_gpu_caller(stream, query.size(), train.size());
+		cuda.downloadAsync(stream, h_result, query.size());
+		end = std::chrono::high_resolution_clock::now();
+		time += end - srt;
+	}
 	cuda.sync(stream);
-	
 	cuda.cudaFreeAcyncMatcher(stream);
 
-	printf("%" PRId64 "\n", std::chrono::duration_cast<std::chrono::milliseconds>(global_time).count());
+	printf("%d\n", std::chrono::duration_cast<std::chrono::milliseconds>(time).count());
 }
 void RawFileConverter()
 {

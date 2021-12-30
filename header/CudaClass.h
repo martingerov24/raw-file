@@ -29,7 +29,7 @@ public:
 		, d_resMatcher(nullptr)
 	{
 		cudaStatus = cudaError_t(0);
-		cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
+   		cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
 		cudaStatus = cudaSetDevice(0);
 		assert(cudaStatus == cudaSuccess && "you do not have cuda capable device!");
 		cudaStatus = cudaStreamCreate(&stream);
@@ -49,12 +49,12 @@ public:
 
 	__host__ void MemoryAllocationAsync(cudaStream_t &providedstream , std::vector<descriptor_t> &query, std::vector<descriptor_t> &train)
 	{
-			cudaStatus = cudaMallocAsync((void**)&d_query, sizeof(descriptor_t) *  query.size(),  providedstream);
-			assert(cudaStatus == cudaSuccess && "not able to allocate memory on device1");
-			cudaStatus = cudaMallocAsync((void**)&d_train, sizeof(descriptor_t) *  train.size(),  providedstream);
-			assert(cudaStatus == cudaSuccess && "not able to allocate memory on device2");
-			cudaStatus = cudaMallocAsync((void**)&d_resMatcher, sizeof(uint16_t) * query.size(),  providedstream);
-			assert(cudaStatus == cudaSuccess && "not able to allocate memory on device3");
+		cudaStatus = cudaMallocAsync((void**)&d_query, sizeof(descriptor_t) *  query.size(),  providedstream);
+		assert(cudaStatus == cudaSuccess && "not able to allocate memory on device1");
+		cudaStatus = cudaMallocAsync((void**)&d_train, sizeof(descriptor_t) *  train.size(),  providedstream);
+		assert(cudaStatus == cudaSuccess && "not able to allocate memory on device2");
+		cudaStatus = cudaMallocAsync((void**)&d_resMatcher, sizeof(uint16_t) * query.size(),  providedstream);
+		assert(cudaStatus == cudaSuccess && "not able to allocate memory on device3");
 	}
 
 	__host__ void cudaUploadKeypoints(std::vector<float>& kp)
@@ -68,10 +68,10 @@ public:
 
 	__host__ void MemcpyUploadAsyncForMatches(cudaStream_t& stream2, std::vector<descriptor_t>& query, std::vector<descriptor_t>& train)
 	{
-			cudaStatus = cudaMemcpyAsync(d_query, query.data(), sizeof(descriptor_t) * query.size(), cudaMemcpyHostToDevice, stream2);
-			assert(cudaStatus == cudaSuccess && "assert in cudaMemcpyAsync 1");
-			cudaStatus = cudaMemcpyAsync(d_train, train.data(), sizeof(descriptor_t) * train.size(), cudaMemcpyHostToDevice, stream2);
-			assert(cudaStatus == cudaSuccess && "assert in cudaMemcpyAsync 2");
+		cudaStatus = cudaMemcpyAsync(d_query, query.data(), sizeof(descriptor_t) * query.size(), cudaMemcpyHostToDevice, stream2);
+		assert(cudaStatus == cudaSuccess && "assert in cudaMemcpyAsync 1");
+		cudaStatus = cudaMemcpyAsync(d_train, train.data(), sizeof(descriptor_t) * train.size(), cudaMemcpyHostToDevice, stream2);
+		assert(cudaStatus == cudaSuccess && "assert in cudaMemcpyAsync 2");
 	}
 
 	__host__ void downloadAsync(cudaStream_t &provided_stream, std::vector<uint16_t> &result, int size)
@@ -99,15 +99,15 @@ public:
 
 	__host__ void cudaFreeAcyncMatcher(cudaStream_t &provided_stream)
 	{
-		/*cudaStatus = cudaFreeAsync(d_query,		 provided_stream);
-		assert(cudaSuccess && "cuda free async");
+		cudaStatus = cudaFreeAsync(d_query,		 provided_stream);
+		assert(cudaStatus == cudaSuccess && "cuda free async");
 		cudaStatus = cudaFreeAsync(d_train,		 provided_stream);
-		assert(cudaSuccess && "cuda free async2");
+		assert(cudaStatus == cudaSuccess && "cuda free async2");
 		cudaStatus = cudaFreeAsync(d_resMatcher, provided_stream);
-		assert(cudaSuccess && "cuda free async3");*/
-		cudaFree(d_query);
+		assert(cudaStatus == cudaSuccess && "cuda free async3");
+		/*cudaFree(d_query);
 		cudaFree(d_train);
-		cudaFree(d_resMatcher);
+		cudaFree(d_resMatcher);*/
 	}
 
 	__host__ ~CudaKeypoints()
