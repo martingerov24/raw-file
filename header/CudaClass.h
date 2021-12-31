@@ -3,6 +3,7 @@
 #include "cuda_runtime.h"
 #include "cuda/std/cmath"
 #include "device_launch_parameters.h"
+#include "nvtx3/nvToolsExt.h"
 
 #include <vector>
 #include <cassert>
@@ -91,10 +92,13 @@ public:
 	__host__ void match_gpu_caller(const cudaStream_t& providedStream, int queryCount, int trainCount);
 
 	__host__ void Kernel(int kpSize);
+	
+	__host__ void getSmallElements(std::vector<float2>& arr, std::vector<float2>& output, float exclude, cudaStream_t& providedStream);
 
 	__host__ void sync(cudaStream_t &providedStream)
 	{
 		cudaStatus = cudaStreamSynchronize(providedStream);
+		assert(cudaStatus == cudaSuccess && "Failed to sync");
 	}
 
 	__host__ void cudaFreeAcyncMatcher(cudaStream_t &provided_stream)
@@ -105,9 +109,6 @@ public:
 		assert(cudaStatus == cudaSuccess && "cuda free async2");
 		cudaStatus = cudaFreeAsync(d_resMatcher, provided_stream);
 		assert(cudaStatus == cudaSuccess && "cuda free async3");
-		/*cudaFree(d_query);
-		cudaFree(d_train);
-		cudaFree(d_resMatcher);*/
 	}
 
 	__host__ ~CudaKeypoints()

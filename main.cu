@@ -120,6 +120,17 @@ void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 	glfwDestroyWindow(window);
 }
 
+struct NVProf {
+	NVProf(const char* name) {
+		nvtxRangePush(name);
+	}
+	~NVProf() {
+		nvtxRangePop();
+	}
+};
+
+#define NVPROF_SCOPE(X) NVProf __nvprof(X);
+
 void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, const int width)
 {
 	cudaStream_t stream;
@@ -129,37 +140,61 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 	int size = height * width;
 	std::vector<descriptor_t> query;
 	std::vector<descriptor_t> train;
-
+	float a = 5.0f;
 	CudaKeypoints cuda(data, height, width);
+	std::vector<float2> input(1000);
+	std::vector<float2> output(1000);
+	input[0].x = 1000.f;
+	input[0].y = 0;
+	for (int i = 1; i < 1000; i++)
+	{
+		input[i].x = (float(rand()) / float((RAND_MAX)) * a);
+		input[i].y = (float(rand()) / float((RAND_MAX)) * a);
+	}
+	cuda.getSmallElements(input, output, 5.0f, stream);
+	for (int i = 0; i < output.size(); i++)
+	{
+		if (output[i].y > 5.0f)
+		{
+			printf("there is an impostor in the group => %f\n", output[i].y);
+		}
+	}
 	cuda.startup(size, leftPoint.size() / 2);
 
-	cuda.cudaUploadKeypoints(leftPoint);
-	cuda.Kernel(leftPoint.size() / 2);
-	cuda.cudaMemcpyD2H(query, leftPoint.size() / 2);
-	cuda.sync(stream);
-
-	cuda.cudaUploadKeypoints(rightPoint);
-	cuda.Kernel(rightPoint.size() / 2);
-	cuda.cudaMemcpyD2H(train, rightPoint.size() / 2);
-	cuda.sync(stream);
-
-	auto srt = std::chrono::high_resolution_clock::now();
-	auto end = std::chrono::high_resolution_clock::now();
-	auto time = end - srt;
-	cuda.MemoryAllocationAsync(stream, query, train);
-	for (int i = 0; i < 1000; i++)
 	{
-		srt = std::chrono::high_resolution_clock::now();
+		NVPROF_SCOPE("Kernel plus copy from cpu-gpu");
+		cuda.cudaUploadKeypoints(leftPoint);
+		cuda.Kernel(leftPoint.size() / 2);
+		cuda.cudaMemcpyD2H(query, leftPoint.size() / 2);
+	}
+	cuda.sync(stream);
+
+	{
+		NVPROF_SCOPE("Second kernel cpu-gpu");
+		cuda.cudaUploadKeypoints(rightPoint);
+		cuda.Kernel(rightPoint.size() / 2);
+		cuda.cudaMemcpyD2H(train, rightPoint.size() / 2);
+	}
+	cuda.sync(stream);
+
+	cuda.MemoryAllocationAsync(stream, query.size(), train.size());
+	
+	{	
+		NVPROF_SCOPE("for a single iteration on match kernel");
 		cuda.MemcpyUploadAsyncForMatches(stream, query, train);
 		cuda.match_gpu_caller(stream, query.size(), train.size());
 		cuda.downloadAsync(stream, h_result, query.size());
-		end = std::chrono::high_resolution_clock::now();
-		time += end - srt;
+		cuda.sync(stream);	
 	}
-	cuda.sync(stream);
 	cuda.cudaFreeAcyncMatcher(stream);
 
-	printf("%d\n", std::chrono::duration_cast<std::chrono::milliseconds>(time).count());
+	cuda.MemoryAllocationManagedForMatches(query.size(), train.size());
+	{
+		NVPROF_SCOPE("managedAllocationPipeline");
+		cuda.AttachMemAsync(stream, query, train);
+		cuda.match_gpu_caller(stream, query.size(), train.size());
+		cuda.sync(stream);
+	}
 }
 void RawFileConverter()
 {

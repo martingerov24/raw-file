@@ -18,11 +18,25 @@ void match_kernel(const uint32_t* const __restrict__ query_descriptors,
 	uint16_t best_idx = 0;
 	uint8_t best_distance = 255;
 
+	uint32_t localArr[8] = {
+		query_descriptors[query_idx * 8 + 0],
+		query_descriptors[query_idx * 8 + 1],
+		query_descriptors[query_idx * 8 + 2],
+		query_descriptors[query_idx * 8 + 3],
+		query_descriptors[query_idx * 8 + 4],
+		query_descriptors[query_idx * 8 + 5],
+		query_descriptors[query_idx * 8 + 6],
+		query_descriptors[query_idx * 8 + 7],
+	};
+
 	uint8_t distance = 0;
 	for (uint16_t train_idx = 0; train_idx < num_train_descriptors; train_idx++) {
+
+		#pragma unroll
 		for (uint8_t i = 0; i < 8; i++) {
 			distance +=
-				__popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ query_descriptors[query_idx * 8 + i]));
+				__popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ localArr[i]));
+				//__popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ query_descriptors[query_idx * 8 + i]));
 		}
 		if (distance < best_distance) {
 			best_distance = distance;
@@ -51,25 +65,25 @@ void multi_match_kernel(const uint32_t* const __restrict__ query_descriptors,
 	uint8_t best_distance = 255;
 	uint16_t best_idx = 0;
 
-	//uint32_t localArr[8] = {
-	//	query_descriptors[query_idx * 8 + 0],
-	//	query_descriptors[query_idx * 8 + 1],
-	//	query_descriptors[query_idx * 8 + 2],
-	//	query_descriptors[query_idx * 8 + 3],
-	//	query_descriptors[query_idx * 8 + 4],
-	//	query_descriptors[query_idx * 8 + 5],
-	//	query_descriptors[query_idx * 8 + 6],
-	//	query_descriptors[query_idx * 8 + 7],
-	//};
+	uint32_t localArr[8] = {
+		query_descriptors[query_idx * 8 + 0],
+		query_descriptors[query_idx * 8 + 1],
+		query_descriptors[query_idx * 8 + 2],
+		query_descriptors[query_idx * 8 + 3],
+		query_descriptors[query_idx * 8 + 4],
+		query_descriptors[query_idx * 8 + 5],
+		query_descriptors[query_idx * 8 + 6],
+		query_descriptors[query_idx * 8 + 7],
+	};
 
 	for (uint16_t train_idx = 0; train_idx < num_train_descriptors[frame]; train_idx++) 
 	{
+#pragma unroll
 		uint8_t distance = 0;
-		//#pragma unroll
 		for (uint8_t i = 0; i < 8; i++) {
-			distance += __popc(
-				static_cast<int>(train_descriptors[frame][train_idx * 8 + i] ^ query_descriptors[query_idx * 8 + i]));
-			//distance += __popc(static_cast<int>(train_descriptors[frame][train_idx * 8 + i] ^ localArr[i]));
+			
+			distance += __popc(static_cast<int>(train_descriptors[frame][train_idx * 8 + i] ^ localArr[i]));
+				//static_cast<int>(train_descriptors[frame][train_idx * 8 + i] ^ query_descriptors[query_idx * 8 + i]));
 		}
 		if (distance < best_distance) {
 			best_distance = distance;
@@ -77,7 +91,6 @@ void multi_match_kernel(const uint32_t* const __restrict__ query_descriptors,
 		}
 	}
 	best_idxs[frame][query_idx] = best_idx;
-	__syncthreads();
 }
 
 __host__ void CudaKeypoints::match_gpu_caller(const cudaStream_t &providedStream, int queryCount, int trainCount)

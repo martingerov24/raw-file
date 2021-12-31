@@ -58,6 +58,7 @@ set(SOURCES
 	header/stb_image.h
 	header/stb_image_resize.h
 	header/keypoints_Test.cpp
+	header/atomicAdd.cu
 )
 
 add_executable(file_reading_cuda ${SOURCES})
