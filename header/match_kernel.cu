@@ -95,9 +95,12 @@ void multi_match_kernel(const uint32_t* const __restrict__ query_descriptors,
 
 __host__ void CudaKeypoints::match_gpu_caller(const cudaStream_t &providedStream, int queryCount, int trainCount)
 {
+	
 	match_kernel << <(queryCount + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK, 0, providedStream >> > (d_query, d_train, d_resMatcher,
 		queryCount, trainCount);
 }
+
+
 
 //constexpr uint64_t NUM_KPTS = 8192;// limit of pva implementation of harris corner detection
 //using keypoints_t = std::vector<float2>;
