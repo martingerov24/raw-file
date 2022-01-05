@@ -39,6 +39,8 @@ __host__ void CudaKeypoints::getSmallElements(std::vector<float2> &arr, std::vec
 	const int numBlocks = (arr.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
 	sumKernel << <numBlocks, THREADS_PER_BLOCK, 0, providedStream >> > (d_arr, d_output, 2);
+	auto cudaStatus = cudaGetLastError();
+	assert(cudaStatus == cudaSuccess && "porblem with mathc kernel");
 
 	cudaStatus = cudaMemcpyAsync(output.data(), d_output, sizeof(float2) * arr.size(), cudaMemcpyDeviceToHost, providedStream);
 
