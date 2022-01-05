@@ -48,27 +48,31 @@ public:
         assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
     }
 
-    __host__ void MemoryAllocationManagedForMatches(std::vector<descriptor_t>& query, std::vector<descriptor_t>& train)
+    __host__ void MemoryAllocationManagedForMatches(int querySize, int trainSize)
     {
-		d_query = (uint32_t*)query.data();
-		d_train = (uint32_t*)train.data();
-
-        cudaStatus = cudaMallocManaged((void**)&d_query, sizeof(descriptor_t) * query.size());
+        cudaStatus = cudaMallocManaged((void**)&d_query, sizeof(descriptor_t) * querySize);
         assert(cudaStatus == cudaSuccess && "not able to allocate memory on device1");
-        cudaStatus = cudaMallocManaged((void**)&d_train, sizeof(descriptor_t) * train.size());
+        
+		cudaStatus = cudaMallocManaged((void**)&d_train, sizeof(descriptor_t) * trainSize);
         assert(cudaStatus == cudaSuccess && "not able to allocate memory on device2");
-		
-		cudaStatus = cudaMalloc((void**)&d_resMatcher, sizeof(uint16_t) * query.size());
+
+		cudaStatus = cudaMallocManaged((void**)&d_resMatcher, sizeof(uint16_t) * querySize);
         assert(cudaStatus == cudaSuccess && "not able to allocate memory on device3");
     }
 
     __host__ void AttachMemAsync(cudaStream_t& providedstream, std::vector<descriptor_t>& query, std::vector<descriptor_t>& train)
     {
-        cudaStatus = cudaStreamAttachMemAsync(providedstream, d_query);
+        cudaStatus = cudaStreamAttachMemAsync(providedstream, d_query, sizeof(descriptor_t) * query.size(), cudaMemAttachGlobal);
         assert(cudaStatus == cudaSuccess && "not able to attach memory on ram -> for gd sake");
 
-        cudaStatus = cudaStreamAttachMemAsync(providedstream, d_train);
+        cudaStatus = cudaStreamAttachMemAsync(providedstream, d_train, sizeof(descriptor_t) * train.size(), cudaMemAttachGlobal);
         assert(cudaStatus == cudaSuccess && "assert in attach memory on ram.... for second time");
+
+		cudaStatus = cudaStreamAttachMemAsync(providedstream, d_resMatcher, sizeof(uint16_t) * query.size(), cudaMemAttachGlobal);
+		assert(cudaStatus == cudaSuccess && "assert in attach memory on ram.... for second time");
+
+		cudaStatus = cudaMemcpyAsync(d_query, query.data(), sizeof(descriptor_t) * query.size(), cudaMemcpyHostToDevice, providedstream);
+		cudaStatus = cudaMemcpyAsync(d_train, train.data(), sizeof(descriptor_t) * train.size(), cudaMemcpyHostToDevice, providedstream);
 
 		cudaStatus = cudaStreamSynchronize(providedstream);
         assert(cudaStatus == cudaSuccess && "not able to sync after memory attachment");

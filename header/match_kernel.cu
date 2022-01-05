@@ -35,7 +35,7 @@ void match_kernel(const uint32_t* const __restrict__ query_descriptors,
 		#pragma unroll
 		for (uint8_t i = 0; i < 8; i++) {
 			distance +=
-				__popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ localArr[i]));
+				__popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ localArr[i])); // try shorting the for cycle(__popcll()) or use the __popc from 
 				//__popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ query_descriptors[query_idx * 8 + i]));
 		}
 		if (distance < best_distance) {
@@ -95,9 +95,11 @@ void multi_match_kernel(const uint32_t* const __restrict__ query_descriptors,
 
 __host__ void CudaKeypoints::match_gpu_caller(const cudaStream_t &providedStream, int queryCount, int trainCount)
 {
-	
-	match_kernel << <(queryCount + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK, 0, providedStream >> > (d_query, d_train, d_resMatcher,
+	const int blocks = (queryCount + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+	match_kernel << <blocks, THREADS_PER_BLOCK, 0, providedStream >> > (d_query, d_train, d_resMatcher,
 		queryCount, trainCount);
+	auto status = cudaGetLastError();
+	assert(status == cudaSuccess && "porblem with mathc kernel");
 }
 
 

@@ -96,7 +96,8 @@ void CudaKeypoints::Kernel(int kpSize)
 	const int numBlocks = (kpSize*32 + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 	brief_kernel << < numBlocks, THREADS_PER_BLOCK, 0, stream >> > (d_result, d_kp
 		, d_image, height, width, kpSize);
-
+	auto cudaStatus = cudaGetLastError();
+	assert(cudaStatus == cudaSuccess && "porblem with mathc kernel");
 	/*brief_kernel << < keypointSize, 32, 0, stream >> > (d_result, d_kp
 		, d_image, width, height, keypointSize);*/
 }

@@ -134,8 +134,10 @@ struct NVProf {
 void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, const int width)
 {
 	auto time = std::chrono::duration<double>();
+
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
+	
 	std::vector<uint16_t> h_result;
 	int size = height * width;
 	float a = 5.0f;
@@ -144,8 +146,8 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 	std::vector<descriptor_t> train;
 	CudaKeypoints cuda(data, height, width);
 
-	//function to get the smallest elements from an array
-	// getSmallElements()
+	/*function to get the smallest elements from an array
+	 getSmallElements()*/
 	std::vector<float2> input(1000);
 	std::vector<float2> output(1000);
 	input[0].x = 1000.f;
@@ -163,10 +165,10 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 			printf("there is an impostor in the group => %f\n", output[i].y);
 		}
 	}
-	// ~getSmallElements()
+	 /*~getSmallElements()
 
-	//keypoitns for query and train
-	// Kernel()
+	keypoitns for query and train
+	 Kernel()*/
 	cuda.startup(size, leftPoint.size() / 2);
 
 	{
@@ -184,21 +186,18 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 		cuda.cudaMemcpyD2H(train, rightPoint.size() / 2);
 	}
 	cuda.sync(stream);
-	// ~Kernel
+	/* ~Kernel
 
-	// meatcher
+	 meatcher*/
 	cuda.MemoryAllocationAsync(stream, query.size(), train.size());
 	
 	{	
 		auto start = std::chrono::high_resolution_clock::now();
 		NVPROF_SCOPE("for a single iteration on match kernel");
-		for (int  i = 0; i < 1000; i++)
-		{
 			cuda.MemcpyUploadAsyncForMatches(stream, query, train);
 			cuda.match_gpu_caller(stream, query.size(), train.size());
 			cuda.downloadAsync(stream, h_result, query.size());
-			cuda.sync(stream);	
-		}
+			cuda.sync(stream);
 		auto end = std::chrono::high_resolution_clock::now();
 		time = end - start;
 	}
@@ -207,24 +206,21 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 	cuda.cudaFreeAcyncMatcher(stream);
 	//~meatcher
 
-	// memory allcation managed
-	// if there ain't memMallocManaged in d.cuda declare memory using the __managed__ keyword
-	cuda.MemoryAllocationManagedForMatches(query, train);
+	/* memory allcation managed
+	 if there ain't memMallocManaged in d.cuda declare memory using the __managed__ keyword*/
+	cuda.MemoryAllocationManagedForMatches(query.size(), train.size());
 	{
 		auto start = std::chrono::high_resolution_clock::now();
 		NVPROF_SCOPE("managedAllocationPipeline");
-		for (int i = 0; i < 1000; i++)
-		{
+
 			cuda.AttachMemAsync(stream, query, train);
 			cuda.match_gpu_caller(stream, query.size(), train.size());
-			cuda.downloadAsync(stream, h_result, query.size());
 			cuda.sync(stream);
-		}
 		auto end = std::chrono::high_resolution_clock::now();
 		time = end - start;
 	}
 	printf("%f\n", time.count());
-	// ~memory allcation managed
+	 //~memory allcation managed
 	cuda.cudaFreeManaged();
 }
 void RawFileConverter()
