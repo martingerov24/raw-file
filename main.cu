@@ -192,16 +192,19 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 	cuda.MemoryAllocationAsync(stream, query.size(), train.size());
 	
 	{	
-<<<<<<< HEAD
 		for (int i = 0; i < 1000; ++i)
 		{
+			auto start = std::chrono::high_resolution_clock::now();
 			NVPROF_SCOPE("for a single iteration on match kernel");
 			cuda.MemcpyUploadAsyncForMatches(stream, query, train);
 			cuda.match_gpu_caller(stream, query.size(), train.size());
 			cuda.downloadAsync(stream, h_result, query.size());
 			cuda.sync(stream);
+			auto end = std::chrono::high_resolution_clock::now();
+			time += end - start;
 		}
 	}
+	printf("%f ", time.count());
 	time = std::chrono::microseconds::zero();
 	cuda.cudaFreeAcyncMatcher(stream);
 	//for (int i = 0; i < 100; ++i)
@@ -230,38 +233,6 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 	//printf("%f\n", time.count());
 	// //~memory allcation managed
 	//cuda.cudaFreeManaged();
-=======
-		auto start = std::chrono::high_resolution_clock::now();
-		NVPROF_SCOPE("for a single iteration on match kernel");
-			cuda.MemcpyUploadAsyncForMatches(stream, query, train);
-			cuda.match_gpu_caller(stream, query.size(), train.size());
-			cuda.downloadAsync(stream, h_result, query.size());
-			cuda.sync(stream);
-		auto end = std::chrono::high_resolution_clock::now();
-		time = end - start;
-	}
-	printf("%f\n", time.count());
-	time = std::chrono::microseconds::zero();
-	cuda.cudaFreeAcyncMatcher(stream);
-	//~meatcher
-
-	/* memory allcation managed
-	 if there ain't memMallocManaged in d.cuda declare memory using the __managed__ keyword*/
-	cuda.MemoryAllocationManagedForMatches(query.size(), train.size());
-	{
-		auto start = std::chrono::high_resolution_clock::now();
-		NVPROF_SCOPE("managedAllocationPipeline");
-
-			cuda.AttachMemAsync(stream, query, train);
-			cuda.match_gpu_caller(stream, query.size(), train.size());
-			cuda.sync(stream);
-		auto end = std::chrono::high_resolution_clock::now();
-		time = end - start;
-	}
-	printf("%f\n", time.count());
-	 //~memory allcation managed
-	cuda.cudaFreeManaged();
->>>>>>> db03f38348b6c603b487efbdfc636af10f95b477
 }
 void RawFileConverter()
 {

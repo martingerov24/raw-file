@@ -25,7 +25,7 @@ void match_kernel(const uint32_t* const __restrict__ query_descriptors,
 		query_descriptors[query_idx * 8 + 6],
 		query_descriptors[query_idx * 8 + 7],
 	};
-	//int32_t value;
+	int32_t value;
 	uint16_t best_idx = 0;
 	uint8_t best_distance = 255;
 	uint8_t distance = 0;
@@ -34,17 +34,17 @@ void match_kernel(const uint32_t* const __restrict__ query_descriptors,
 
 		#pragma unroll
 		for (uint8_t i = 0; i < 8; i++) {
-<<<<<<< HEAD
-			distance += __popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ localArr[i]));
-			//value = static_cast<int>(train_descriptors[train_idx * 8 + i] ^ localArr[i]);
-			//value = value - ((value >> 1) & 0x55555555);                    // reuse input as temporary
-			//value = (value & 0x33333333) + ((value >> 2) & 0x33333333);     // temp
-			//distance += ((value + (value >> 4) & 0xF0F0F0F) * 0x1010101) >> 24;
-=======
-			distance +=
-				__popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ localArr[i])); // try shorting the for cycle(__popcll()) or use the __popc from 
-				//__popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ query_descriptors[query_idx * 8 + i]));
->>>>>>> db03f38348b6c603b487efbdfc636af10f95b477
+
+			//distance += __popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ localArr[i]));
+			value = static_cast<int>(train_descriptors[train_idx * 8 + i] ^ localArr[i]);
+			value = value - ((value >> 1) & 0x55555555);                    // reuse input as temporary
+			value = (value & 0x33333333) + ((value >> 2) & 0x33333333);     // temp
+			distance += ((value + (value >> 4) & 0xF0F0F0F) * 0x1010101) >> 24;
+
+			//distance +=
+			//	__popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ localArr[i])); // try shorting the for cycle(__popcll()) or use the __popc from 
+			//	//__popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ query_descriptors[query_idx * 8 + i]));
+
 		}
 		if (distance < best_distance) {
 			best_distance = distance;
