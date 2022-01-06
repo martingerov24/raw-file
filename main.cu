@@ -152,13 +152,13 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 	std::vector<float2> output(1000);
 	input[0].x = 1000.f;
 	input[0].y = 0;
-	for (int i = 1; i < 1000; i++)
+	for (int i = 1; i < 1000; ++i)
 	{
 		input[i].x = (float(rand()) / float((RAND_MAX)) * a);
 		input[i].y = (float(rand()) / float((RAND_MAX)) * a);
 	}
 	cuda.getSmallElements(input, output, 5.0f, stream);
-	for (int i = 0; i < output.size(); i++)
+	for (int i = 0; i < output.size(); ++i)
 	{
 		if (output[i].y > 5.0f)
 		{
@@ -192,25 +192,25 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 	cuda.MemoryAllocationAsync(stream, query.size(), train.size());
 	
 	{	
-		auto start = std::chrono::high_resolution_clock::now();
-		NVPROF_SCOPE("for a single iteration on match kernel");
+		for (int i = 0; i < 1000; ++i)
+		{
+			NVPROF_SCOPE("for a single iteration on match kernel");
 			cuda.MemcpyUploadAsyncForMatches(stream, query, train);
 			cuda.match_gpu_caller(stream, query.size(), train.size());
 			cuda.downloadAsync(stream, h_result, query.size());
 			cuda.sync(stream);
-		auto end = std::chrono::high_resolution_clock::now();
-		time = end - start;
-	}
-	printf("%f\n", time.count());
-	time = std::chrono::microseconds::zero();
-	cuda.cudaFreeAcyncMatcher(stream);
-	for (int i = 0; i < 100; i++)
-	{
-		if (h_result[i] != matcher_result[i])
-		{
-			printf("not equal");
 		}
 	}
+	time = std::chrono::microseconds::zero();
+	cuda.cudaFreeAcyncMatcher(stream);
+	//for (int i = 0; i < 100; ++i)
+	//{
+	//	if (h_result[i] != matcher_result[i])
+	//	{
+	//		printf("not equal\n");
+	//	}
+	//}
+
 	//~meatcher
 
 	/* memory allcation managed
