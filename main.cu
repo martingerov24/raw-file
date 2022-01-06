@@ -18,7 +18,13 @@
 #include <iostream>
 #include <inttypes.h>
 
-//extern std::vector<uint8_t> result;
+#define PROFILING 1
+#if PROFILING 
+#include "../minitrace/minitrace.h"
+#include "../minitrace/minitrace.c"
+#endif 
+// PROFILING
+
 extern std::vector<uint16_t> matcher_result;
 
 bool load(std::vector<uint8_t> &image,  int &width, int &height, int& channels)
@@ -131,8 +137,15 @@ struct NVProf {
 
 #define NVPROF_SCOPE(X) NVProf __nvprof(X);
 
+
 void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, const int width)
 {
+#ifdef PROFILING
+	mtr_init("../trace.json");
+	MTR_META_PROCESS_NAME("MINITRACE_test");
+	MTR_META_THREAD_NAME("main thread");
+#endif // PROFILING
+
 	auto time = std::chrono::duration<double>();
 
 	cudaStream_t stream;
@@ -190,19 +203,39 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 
 	 meatcher*/
 	cuda.MemoryAllocationAsync(stream, query.size(), train.size());
-	
 	{	
+
+#ifdef PROFILING
+		int long_running_thing_1;
+		int long_running_thing_2;
+		MTR_START("background", "long_running", &long_running_thing_1);
+		MTR_START("background", "long_running", &long_running_thing_2);
+		MTR_BEGIN("main", "outer");
+#endif // PROFILING
+
 		for (int i = 0; i < 1000; ++i)
 		{
 			auto start = std::chrono::high_resolution_clock::now();
 			NVPROF_SCOPE("for a single iteration on match kernel");
 			cuda.MemcpyUploadAsyncForMatches(stream, query, train);
+#ifdef PROFILING
+			MTR_BEGIN("main", "match_kernel");
+#endif // PROFILING
 			cuda.match_gpu_caller(stream, query.size(), train.size());
+#ifdef PROFILING
+			MTR_END("main", "match_kernel");
+#endif // PROFILING
 			cuda.downloadAsync(stream, h_result, query.size());
 			cuda.sync(stream);
 			auto end = std::chrono::high_resolution_clock::now();
 			time += end - start;
 		}
+#ifdef PROFILING
+		MTR_END("main", "outer");
+		MTR_FINISH("background", "long_running", &long_running_thing_1);
+		MTR_FINISH("background", "long_running", &long_running_thing_2);
+#endif // PROFILING
+
 	}
 	printf("%f ", time.count());
 	time = std::chrono::microseconds::zero();
@@ -233,6 +266,10 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 	//printf("%f\n", time.count());
 	// //~memory allcation managed
 	//cuda.cudaFreeManaged();
+#ifdef PROFILING
+	mtr_flush();
+	mtr_shutdown(); 
+#endif // PROFILING
 }
 void RawFileConverter()
 {
@@ -255,6 +292,7 @@ int main()
 	//RawFileConverter();
 	//KeypointTest();
 	MatchKernel();
+
 	return 0;
 }
 
