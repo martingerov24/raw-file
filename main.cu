@@ -72,12 +72,22 @@ void createContext(GLFWwindow* &window)
 
 void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 {
-	std::vector<uint8_t> h_result;
-	int size = height * width * 3;
-	h_result.resize(size);
+	cudaError_t cudaStatus = cudaError_t(0);
+	cudaStream_t stream;
+	cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
+	cudaStatus = cudaSetDevice(0);
+	assert(cudaStatus == cudaSuccess && "you do not have cuda capable device!");
+	cudaStatus = cudaStreamCreate(&stream);
 
-	Cuda cuda(h_result, data, height, width);
-	cuda.startup(size);
+	std::vector<uint8_t> h_result;
+	int size = height * width;
+	h_result.resize(size*3);
+	
+	Cuda cuda(height, width, cudaStatus);
+	cuda.memoryAllocation(stream, size);
+	cuda.uploadToDevice(stream, data);
+	cuda.rawValue(stream);
+	cuda.download(stream, h_result, size * 3);
 
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -93,8 +103,7 @@ void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 		glfwTerminate();
 		throw "no window created";
 	}
-
-	cuda.sync();
+	cuda.sync(stream);
 	createContext(window);
 
 	bool is_show = true;
@@ -103,11 +112,12 @@ void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 
 	while (!glfwWindowShouldClose(window))
 	{
-		cuda.rawValue();
+		cuda.rawValue(stream);
+		cuda.download(stream, h_result, size * 3);
 		onNewFrame();
 		ImGui::Begin("raw Image", &is_show);
 		bindTexture(texture);
-		cuda.sync();
+		cuda.sync(stream);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, h_result.data());
 		ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(texture)), ImVec2(800, 600));
 		ImGui::End();
@@ -118,7 +128,6 @@ void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 		glfwSwapBuffers(window);
 	}
 
-	cuda.outPutFile();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui::DestroyContext();
@@ -135,8 +144,23 @@ struct NVProf {
 	}
 };
 
-#define NVPROF_SCOPE(X) NVProf __nvprof(X);
+struct CPUProf
+{
+	CPUProf(std::string& thread, std::string&name)
+		:thread(thread), name(name)
+	{
+		MTR_BEGIN(thread, name);
+	}
+	~CPUProf()
+	{
+		MTR_END(thread, name);
+	}
+	std::string& thread;
+	std::string& name;
+};
 
+#define NVPROF_SCOPE(X) NVProf __nvprof(X);
+#define CPUPROF_SCOPE(x, y) CPUProf __cpuprof(x,y);
 
 void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, const int width)
 {
@@ -144,44 +168,22 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 	mtr_init("../trace.json");
 	MTR_META_PROCESS_NAME("MINITRACE_test");
 	MTR_META_THREAD_NAME("main thread");
+
+	int long_running_thing_1;
+	int long_running_thing_2;
+	MTR_START("background", "long_running", &long_running_thing_1);
+	MTR_START("background", "long_running", &long_running_thing_2);
 #endif // PROFILING
-
-	auto time = std::chrono::duration<double>();
-
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 	
 	std::vector<uint16_t> h_result;
 	int size = height * width;
-	float a = 5.0f;
 	
 	std::vector<descriptor_t> query;
 	std::vector<descriptor_t> train;
 	CudaKeypoints cuda(data, height, width);
 
-	/*function to get the smallest elements from an array
-	 getSmallElements()*/
-	std::vector<float2> input(1000);
-	std::vector<float2> output(1000);
-	input[0].x = 1000.f;
-	input[0].y = 0;
-	for (int i = 1; i < 1000; ++i)
-	{
-		input[i].x = (float(rand()) / float((RAND_MAX)) * a);
-		input[i].y = (float(rand()) / float((RAND_MAX)) * a);
-	}
-	cuda.getSmallElements(input, output, 5.0f, stream);
-	for (int i = 0; i < output.size(); ++i)
-	{
-		if (output[i].y > 5.0f)
-		{
-			printf("there is an impostor in the group => %f\n", output[i].y);
-		}
-	}
-	 /*~getSmallElements()
-
-	keypoitns for query and train
-	 Kernel()*/
 	cuda.startup(size, leftPoint.size() / 2);
 
 	{
@@ -198,77 +200,35 @@ void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, cons
 		cuda.Kernel(rightPoint.size() / 2);
 		cuda.cudaMemcpyD2H(train, rightPoint.size() / 2);
 	}
+
 	cuda.sync(stream);
-	/* ~Kernel
 
-	 meatcher*/
 	cuda.MemoryAllocationAsync(stream, query.size(), train.size());
-	{	
-
-#ifdef PROFILING
-		int long_running_thing_1;
-		int long_running_thing_2;
-		MTR_START("background", "long_running", &long_running_thing_1);
-		MTR_START("background", "long_running", &long_running_thing_2);
-		MTR_BEGIN("main", "outer");
-#endif // PROFILING
-
+	{
+		CPUPROF_SCOPE(std::string("main"), std::string("for 1000 iterations -> matcher"));
 		for (int i = 0; i < 1000; ++i)
 		{
-			auto start = std::chrono::high_resolution_clock::now();
 			NVPROF_SCOPE("for a single iteration on match kernel");
 			cuda.MemcpyUploadAsyncForMatches(stream, query, train);
-#ifdef PROFILING
-			MTR_BEGIN("main", "match_kernel");
-#endif // PROFILING
 			cuda.match_gpu_caller(stream, query.size(), train.size());
-#ifdef PROFILING
-			MTR_END("main", "match_kernel");
-#endif // PROFILING
 			cuda.downloadAsync(stream, h_result, query.size());
 			cuda.sync(stream);
-			auto end = std::chrono::high_resolution_clock::now();
-			time += end - start;
 		}
-#ifdef PROFILING
-		MTR_END("main", "outer");
-		MTR_FINISH("background", "long_running", &long_running_thing_1);
-		MTR_FINISH("background", "long_running", &long_running_thing_2);
-#endif // PROFILING
-
+		cuda.cudaFreeAcyncMatcher(stream);
 	}
-	printf("%f ", time.count());
-	time = std::chrono::microseconds::zero();
-	cuda.cudaFreeAcyncMatcher(stream);
-	//for (int i = 0; i < 100; ++i)
-	//{
-	//	if (h_result[i] != matcher_result[i])
-	//	{
-	//		printf("not equal\n");
-	//	}
-	//}
-
-	//~meatcher
-
-	/* memory allcation managed
-	 if there ain't memMallocManaged in d.cuda declare memory using the __managed__ keyword*/
-	//cuda.MemoryAllocationManagedForMatches(query.size(), train.size());
-	//{
-	//	auto start = std::chrono::high_resolution_clock::now();
-	//	NVPROF_SCOPE("managedAllocationPipeline");
-
-	//		cuda.AttachMemAsync(stream, query, train);
-	//		cuda.match_gpu_caller(stream, query.size(), train.size());
-	//		cuda.sync(stream);
-	//	auto end = std::chrono::high_resolution_clock::now();
-	//	time = end - start;
-	//}
-	//printf("%f\n", time.count());
-	// //~memory allcation managed
-	//cuda.cudaFreeManaged();
+	for (int i = 0; i < 100; i++)
+	{
+		if (h_result[i] != matcher_result[i])
+		{
+			printf("wrong_answer\n");
+		}
+	}
+	//33.36
 #ifdef PROFILING
+	MTR_FINISH("background", "long_running", &long_running_thing_1);
+	MTR_FINISH("background", "long_running", &long_running_thing_2);
 	mtr_flush();
-	mtr_shutdown(); 
+	mtr_shutdown();
 #endif // PROFILING
 }
 void RawFileConverter()
@@ -292,7 +252,6 @@ int main()
 	//RawFileConverter();
 	//KeypointTest();
 	MatchKernel();
-
 	return 0;
 }
 

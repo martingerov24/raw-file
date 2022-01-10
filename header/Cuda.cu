@@ -38,17 +38,10 @@ void Checker(uint16_t* __restrict__ d_Data, uint8_t* __restrict__ cpy_Data, int 
 	}
 }
 
-void Cuda::rawValue()
+void Cuda::rawValue(cudaStream_t & providedStream)
 {
-	//auto start = std::chrono::high_resolution_clock::now();
-	cudaStatus = cudaMemcpyAsync(d_data, data.data(), sizeof(uint16_t) * size, cudaMemcpyHostToDevice, stream);
-	assert(cudaStatus == cudaSuccess && "not able to tansfer Data!");
-
 	dim3 sizeOfBlock(((width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height);
 
-	Checker << <sizeOfBlock, THREADS_PER_BLOCK, 0, stream >> > (d_data, cpyData, width, height);
+	Checker << <sizeOfBlock, THREADS_PER_BLOCK, 0, providedStream >> > (d_data, d_result, width, height);
 	auto status = cudaGetLastError();
-
-	cudaStatus = cudaMemcpyAsync(h_cpy.data(), cpyData, sizeof(uint8_t) * size * 3, cudaMemcpyDeviceToHost, stream);
-	assert(cudaStatus == cudaSuccess && "not able to transfer device to host!");
 }

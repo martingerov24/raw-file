@@ -175,37 +175,43 @@ private:
 class Cuda
 {
 public:
-    Cuda(std::vector<uint8_t>& h_cpy, const std::vector<uint16_t>& data,
-        const int& height, const int& width)
-        :h_cpy(h_cpy), data(data), height(height), width(width)
-        , d_data(nullptr), cpyData(nullptr)
+    Cuda(const int& height, const int& width, cudaError_t cudaStatus)
+        :height(height), width(width)
+        , d_data(nullptr), d_result(nullptr), cudaStatus(cudaStatus)
     {
-        cudaStatus = cudaError_t(0);
-        size = height * width;
-        cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
-        cudaStatus = cudaSetDevice(0);
-        assert(cudaStatus == cudaSuccess && "you do not have cuda capable device!");
-        cudaStatus = cudaStreamCreate(&stream);
+        
     }
     
     __host__
-        void startup(int size)
+        void memoryAllocation(cudaStream_t &providedStream, int size)
     {
-        cudaStatus = cudaMalloc((void**)&d_data, size * sizeof(uint16_t));//sizeof(uint16_t) * size
-        assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
+        cudaStatus = cudaMallocAsync((void**)&d_data, size * sizeof(uint16_t), providedStream);
+		assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
 
-        cudaStatus = cudaMalloc((void**)&cpyData, sizeof(uint8_t) * size * 3);
+        cudaStatus = cudaMallocAsync((void**)&d_result, sizeof(uint8_t) * size * 3, providedStream);
         assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
     }
+	__host__ 
+		void uploadToDevice(cudaStream_t & providedStream,const std::vector<uint16_t> &data)
+	{
+		cudaStatus = cudaMemcpyAsync(d_data, data.data(), sizeof(uint16_t) * data.size(), cudaMemcpyHostToDevice, providedStream);
+		assert(cudaStatus == cudaSuccess && "not able to trainsfer data, between host and device");
+	}
+	__host__ 
+		void download(cudaStream_t & providedStream,std::vector<uint8_t> &h_Data, int size)
+	{
+		cudaStatus = cudaMemcpyAsync(h_Data.data(), d_result, sizeof(uint8_t) * size, cudaMemcpyDeviceToHost, providedStream);
+		assert(cudaStatus == cudaSuccess && "not able to transfer device to host!");
+	}
     __host__
-    void rawValue();
+    void rawValue(cudaStream_t& providedStream);
 
     __host__
-    void sync()
+    void sync(cudaStream_t & providedStream)
     {
-        cudaStatus = cudaStreamSynchronize(stream);
+        cudaStatus = cudaStreamSynchronize(providedStream);
     }
-    void outPutFile()
+    void outPutFile(std::vector<uint8_t> & h_cpy)
     {
         FILE* fileWr;
         fileWr = fopen("writingFile.ppm", "w+");
@@ -220,16 +226,13 @@ public:
     __host__
         ~Cuda()
     {
-        cudaFree(cpyData);
         cudaFree(d_data);// it was said to -> cudaFree ( void* devPtr )Frees memory on the device.
-        cudaStreamDestroy(stream);
     }
+
+public:
+	uint8_t* d_result;
 protected:
-    int height, width, size;
+	int height, width, size;
     uint16_t* d_data;
-    uint8_t* cpyData;
-    std::vector<uint8_t> &h_cpy;
-    const std::vector<uint16_t> &data;
-    cudaStream_t stream;
-    cudaError_t cudaStatus;
+	cudaError_t cudaStatus;
 };
