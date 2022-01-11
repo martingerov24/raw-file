@@ -34,7 +34,6 @@ void match_kernel(const uint32_t* const __restrict__ query_descriptors,
 
 	for (uint16_t train_idx = 0; train_idx < num_train_descriptors; ++train_idx) {
 
-		
 		#pragma unroll
 		for (uint8_t i = 0; i < 8; ++i) {
 
@@ -106,7 +105,7 @@ __host__ void CudaKeypoints::match_gpu_caller(const cudaStream_t &providedStream
 	match_kernel << <blocks, THREADS_PER_BLOCK, 0, providedStream >> > (d_query, d_train, d_resMatcher,
 		queryCount, trainCount);
 	auto status = cudaGetLastError();
-	assert(status == cudaSuccess && "porblem with mathc kernel");
+	assert(status == cudaSuccess && "porblem with match kernel");
 }
 
 

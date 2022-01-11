@@ -8,7 +8,6 @@ uint8_t Color(uint16_t number)
 	uint8_t first_8_bits = number & 0b11111111; first_8_bits = first_8_bits >> 4;
 	number = number >> 8;
 	n = number & 0b11111111; n = n >> 4;
-	// so now we have smth like bit1 -> 10101011, bit0 -> 10101011;
 	n = n & 0b1111; // basicly the paddings are throun away
 	// now we have 2 4 bit numbers and when combining them OR || XOR
 	n = n << 4;
@@ -18,23 +17,21 @@ uint8_t Color(uint16_t number)
 }
 
 __global__
-void Checker(uint16_t* __restrict__ d_Data, uint8_t* __restrict__ cpy_Data, int width, int height)
+void Checker(uint16_t* __restrict__ d_Data, uint32_t* __restrict__ cpy_Data,const int width,const int height)
 {
-	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
-	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
+	short x = (blockIdx.x * blockDim.x) + threadIdx.x;
+	short y = (blockIdx.y * blockDim.y) + threadIdx.y;
 	if (x < width && x >= 0
 		&& y < height && y >= 0)
 	{
-		int calc = y * width + x;  //their scope is threadLifeTime
+		int calc = y * width + x;
 		uint8_t n = Color(d_Data[calc]);
-		//h   !w
-		short idx = (y & 1) + !(x & 1);
-		uint8_t rgb[3] = { 0,0,0 };
+
+		uint8_t idx = (y & 1) + !(x & 1);
+		uint8_t rgb[4] = { 0, 0, 0, 1 };
 		rgb[idx] = n;
 
-		cpy_Data[3 * calc + 0] = rgb[0];
-		cpy_Data[3 * calc + 1] = rgb[1];
-		cpy_Data[3 * calc + 2] = rgb[2];
+		cpy_Data[calc] = *reinterpret_cast<int*>(rgb);
 	}
 }
 
@@ -42,6 +39,6 @@ void Cuda::rawValue(cudaStream_t & providedStream)
 {
 	dim3 sizeOfBlock(((width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), height);
 
-	Checker << <sizeOfBlock, THREADS_PER_BLOCK, 0, providedStream >> > (d_data, d_result, width, height);
+	Checker << <sizeOfBlock, THREADS_PER_BLOCK, 0, providedStream >> > (d_data, reinterpret_cast<uint32_t *>(d_result), width, height);
 	auto status = cudaGetLastError();
 }

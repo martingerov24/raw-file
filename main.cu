@@ -81,13 +81,13 @@ void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 
 	std::vector<uint8_t> h_result;
 	int size = height * width;
-	h_result.resize(size*3);
+	h_result.resize(size*4);
 	
 	Cuda cuda(height, width, cudaStatus);
 	cuda.memoryAllocation(stream, size);
 	cuda.uploadToDevice(stream, data);
 	cuda.rawValue(stream);
-	cuda.download(stream, h_result, size * 3);
+	cuda.download(stream, h_result, size * 4);
 
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -113,12 +113,12 @@ void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 	while (!glfwWindowShouldClose(window))
 	{
 		cuda.rawValue(stream);
-		cuda.download(stream, h_result, size * 3);
+		cuda.download(stream, h_result, size * 4);
 		onNewFrame();
 		ImGui::Begin("raw Image", &is_show);
 		bindTexture(texture);
 		cuda.sync(stream);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, h_result.data());
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, h_result.data());
 		ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(texture)), ImVec2(800, 600));
 		ImGui::End();
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
@@ -249,9 +249,8 @@ void MatchKernel()
 }
 int main()
 {
-	//RawFileConverter();
-	//KeypointTest();
-	MatchKernel();
+	RawFileConverter();
+	//MatchKernel();
 	return 0;
 }
 

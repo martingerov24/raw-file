@@ -185,10 +185,10 @@ public:
     __host__
         void memoryAllocation(cudaStream_t &providedStream, int size)
     {
-        cudaStatus = cudaMallocAsync((void**)&d_data, size * sizeof(uint16_t), providedStream);
+        cudaStatus = cudaMallocAsync((void**)&d_data, (size+ 2) * sizeof(uint16_t), providedStream);
 		assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
 
-        cudaStatus = cudaMallocAsync((void**)&d_result, sizeof(uint8_t) * size * 3, providedStream);
+        cudaStatus = cudaMallocAsync((void**)&d_result, sizeof(uint8_t) * size * 4, providedStream);
         assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
     }
 	__host__ 
