@@ -3,11 +3,11 @@
 __device__ __forceinline__
 uint8_t Color(uint16_t number)
 {
-	uint8_t n;
+	
 	// this is the solution if little indian
 	uint8_t first_8_bits = number & 0b11111111; first_8_bits = first_8_bits >> 4;
 	number = number >> 8;
-	n = number & 0b11111111; n = n >> 4;
+	uint8_t n = number & 0b11111111; n = n >> 4;
 	n = n & 0b1111; // basicly the paddings are throun away
 	// now we have 2 4 bit numbers and when combining them OR || XOR
 	n = n << 4;

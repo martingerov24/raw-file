@@ -4,8 +4,8 @@
 
 __global__ 
 void match_kernel(const uint32_t* const __restrict__ query_descriptors,
-	const uint32_t* const __restrict__ __constant__ train_descriptors,
-	uint16_t* const __restrict__ best_idxs,
+	const uint32_t* const  __restrict__ train_descriptors,
+	uint16_t* const __restrict__  best_idxs,
 	const uint16_t num_query_descriptors,
 	const uint16_t num_train_descriptors) 
 {
@@ -37,18 +37,13 @@ void match_kernel(const uint32_t* const __restrict__ query_descriptors,
 		#pragma unroll
 		for (uint8_t i = 0; i < 8; ++i) {
 
-			value = static_cast<uint32_t>(train_descriptors[train_idx * 8 + i] ^ localArr[i]);
-			value = value - ((value >> 1) & 0x55555555);                    // reuse input as temporary
-			value = (value & 0x33333333) + ((value >> 2) & 0x33333333);     // temp
-			distance += ((value + (value >> 4) & 0xF0F0F0F) * 0x1010101) >> 24;
-
+			distance += __popc(static_cast<int>(train_descriptors[train_idx * 8 + i] ^ localArr[i]));
 		}
 		if (distance < best_distance) {
 			best_distance = distance;
 			best_idx = train_idx;
 		}
 	}
-	//}
 	best_idxs[query_idx] = best_idx;
 }
 

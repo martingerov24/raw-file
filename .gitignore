@@ -1,31 +1,3 @@
-build/.vs/
-        build/ALL_BUILD.vcxproj
-        build/ALL_BUILD.vcxproj.filters
-        build/ALL_BUILD.vcxproj.user
-        build/CMakeCache.txt
-        build/CMakeFiles/
-        build/Debug/
-        build/INSTALL.vcxproj
-        build/INSTALL.vcxproj.filters
-        build/Release/
-        build/ZERO_CHECK.vcxproj
-        build/ZERO_CHECK.vcxproj.filters
-        build/cmake_install.cmake
-        build/cpp.hint
-        build/fileToRead.raw
-        build/file_reading_cuda.dir/
-        build/file_reading_cuda.sln
-        build/file_reading_cuda.vcxproj
-        build/file_reading_cuda.vcxproj.filters
-        build/file_reading_cuda.vcxproj.user
-        build/glad.dir/
-        build/glad.vcxproj
-        build/glad.vcxproj.filters
-        build/image.jpg
-        build/imageExtraction.h
-        build/imgui.ini
-        build/thirdparty/
-        build/writingFile.ppm
-        build/x64/
-        thirdparty/glad/
-
+thirdparty/glad/
+build
+*.bak

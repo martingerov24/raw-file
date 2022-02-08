@@ -175,6 +175,7 @@ private:
 class Cuda
 {
 public:
+	Cuda() = default;
     Cuda(const int& height, const int& width, cudaError_t cudaStatus)
         :height(height), width(width)
         , d_data(nullptr), d_result(nullptr), cudaStatus(cudaStatus)
@@ -191,10 +192,29 @@ public:
         cudaStatus = cudaMallocAsync((void**)&d_result, sizeof(uint8_t) * size * 4, providedStream);
         assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
     }
+
+	__host__
+		void standardMemoryAllocation(cudaStream_t& providedStream, int sizeInBytes, int resultSize)
+	{
+		cudaStatus = cudaMallocAsync((void**)&d_data, sizeInBytes, providedStream);
+		assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
+
+		cudaStatus = cudaMallocAsync((void**)&d_result, resultSize, providedStream);
+		assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
+	}
+
 	__host__ 
 		void uploadToDevice(cudaStream_t & providedStream,const std::vector<uint16_t> &data)
 	{
+		if (data.size() == 0) { throw "the vector is empty"; }
 		cudaStatus = cudaMemcpyAsync(d_data, data.data(), sizeof(uint16_t) * data.size(), cudaMemcpyHostToDevice, providedStream);
+		assert(cudaStatus == cudaSuccess && "not able to trainsfer data, between host and device");
+	}
+
+	__host__
+		void uploadToDevice(cudaStream_t& providedStream, const std::vector<float>& data, int size)
+	{
+		cudaStatus = cudaMemcpyAsync(d_data, data.data(), size, cudaMemcpyHostToDevice, providedStream);
 		assert(cudaStatus == cudaSuccess && "not able to trainsfer data, between host and device");
 	}
 	__host__ 
@@ -203,6 +223,8 @@ public:
 		cudaStatus = cudaMemcpyAsync(h_Data.data(), d_result, sizeof(uint8_t) * size, cudaMemcpyDeviceToHost, providedStream);
 		assert(cudaStatus == cudaSuccess && "not able to transfer device to host!");
 	}
+	__host__ 
+		void undistortPoints(cudaStream_t providedStream, const Mat<float>& K, const Mat<float>& distortion);
     __host__
     void rawValue(cudaStream_t& providedStream);
 
@@ -232,7 +254,7 @@ public:
 public:
 	uint8_t* d_result;
 protected:
-	int height, width, size;
+	int height, width;
     uint16_t* d_data;
 	cudaError_t cudaStatus;
 };

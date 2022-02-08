@@ -3,21 +3,21 @@
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
 
-#include <stdio.h>
-#include <vector>
-#include <string>
-#include <chrono>
+#include "../dep/Dep.h"
 
-#include <stdio.h>
-#include <stdlib.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../header/stb_image.h"
 //#define STB_IMAGE_RESIZE_IMPLEMENTATION
 //#include "build/stb_image_resize.h"
 #include "../../header/CudaClass.h"
+
+#include <string>
+#include <chrono>
+
+#include <stdio.h>
+#include <stdlib.h>
 #include <iostream>
 #include <inttypes.h>
-
 #define PROFILING 1
 #if PROFILING 
 #include "../minitrace/minitrace.h"
@@ -70,6 +70,15 @@ void createContext(GLFWwindow* &window)
 	ImGui_ImplOpenGL3_Init("#version 330");
 }
 
+struct NVProf {
+	NVProf(const char* name) {
+		nvtxRangePush(name);
+	}
+	~NVProf() {
+		nvtxRangePop();
+	}
+};
+#define NVPROF_SCOPE(X) NVProf __nvprof(X);
 void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 {
 	cudaError_t cudaStatus = cudaError_t(0);
@@ -112,8 +121,11 @@ void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 
 	while (!glfwWindowShouldClose(window))
 	{
-		cuda.rawValue(stream);
-		cuda.download(stream, h_result, size * 4);
+		{
+			NVPROF_SCOPE("raw - value and downloading");
+			cuda.rawValue(stream);
+			cuda.download(stream, h_result, size * 4);
+		}
 		onNewFrame();
 		ImGui::Begin("raw Image", &is_show);
 		bindTexture(texture);
@@ -134,16 +146,6 @@ void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 	glfwTerminate();
 	glfwDestroyWindow(window);
 }
-
-struct NVProf {
-	NVProf(const char* name) {
-		nvtxRangePush(name);
-	}
-	~NVProf() {
-		nvtxRangePop();
-	}
-};
-
 struct CPUProf
 {
 	CPUProf(std::string& thread, std::string&name)
@@ -159,7 +161,6 @@ struct CPUProf
 	std::string& name;
 };
 
-#define NVPROF_SCOPE(X) NVProf __nvprof(X);
 #define CPUPROF_SCOPE(x, y) CPUProf __cpuprof(x,y);
 
 void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, const int width)
@@ -247,6 +248,23 @@ void MatchKernel()
 	if (!load(data, height, width, channels)) { throw "cannot load an image"; }
 	MatchKernel_Result(data, height, width);
 }
+
+void UndisortPoints(const std::vector<float>& points, std::vector<float>& points_undistorted, const Mat<float> &K, //fst-33, sec 14
+	const Mat<float>& distortio)
+{
+	cudaError_t cudaStatus = cudaError_t(0);
+	cudaStream_t stream;
+	cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
+	cudaStatus = cudaSetDevice(0);
+	assert(cudaStatus == cudaSuccess && "you do not have cuda capable device!");
+	cudaStatus = cudaStreamCreate(&stream);
+
+	Cuda cuda;
+	int32_t sizeofKeypoints = keypoints.size() * sizeof(float);
+	cuda.standardMemoryAllocation(stream, sizeofKeypoints, sizeofKeypoints); // the size of undisorted is the same as keypoints
+	cuda.uploadToDevice(stream, keypoints, sizeofKeypoints);
+}
+
 int main()
 {
 	RawFileConverter();
