@@ -56,7 +56,42 @@ public:
 		create(x, y, other_channels);
 	}
 
-	void create(int x, int y, int other_channels)
+	Mat(const Mat& other)
+	{
+		*this = other;
+		return *this;
+	};
+
+	Mat& operator=(const Mat& other)
+	{
+		*this = other;
+		return *this;
+	}
+
+	Mat& operator=(Mat&& other)
+	{
+		std::swap(*this, other);
+		return *this;
+	}
+
+	Mat(Mat&& other) 
+	{
+		m_cols = other.m_cols;
+		m_rows = other.m_rows;
+		m_step = other.m_step;
+		m_channels = other.m_channels;
+		m_owner = other.m_owner;
+		std::swap(m_matrix, other.m_matrix);
+
+
+		other.m_cols = 0;
+		other.m_rows = 0;
+		other.m_step = 0;
+		other.m_channels = 0;
+		other.m_owner = false;
+	}
+
+	void create(int x, int y, int other_channels = 1)
 	{
 		m_cols = x;
 		m_rows = y;
@@ -66,7 +101,7 @@ public:
 		//mm::deallocate(m_matrix);
 		const uint64_t bytesPerLine = m_channels * m_cols * sizeof(T);
 		m_step = bytesPerLine;
-		m_matrix.resize(m_cols * m_rows * m_channels);
+		m_matrix(m_cols * m_rows * m_channels, 0); // we create a matrix with size of the first, filled with 0
 		//mm::allocate(reinterpret_cast<void**>(&m_matrix), uint64_t(m_step) * m_rows);
 	}
 
@@ -74,10 +109,13 @@ public:
 	{
 		return m_matrix[where];
 	}
-
 	int size()
 	{
 		return m_cols * m_rows;
+	}
+	bool hasData()
+	{
+		return this->m_matrix.size() == 0 ? 1 : 0;
 	}
 	void createPitched(int x, int y) {
 		m_cols = x;
@@ -106,28 +144,6 @@ public:
 			m_matrix = nullptr;
 		}
 	}
-
-	Mat(Mat&& other) {
-		m_cols = other.m_cols;
-		m_rows = other.m_rows;
-		m_step = other.m_step;
-		m_channels = other.m_channels;
-		m_owner = other.m_owner;
-		std::swap(m_matrix, other.m_matrix);
-
-
-		other.m_cols = 0;
-		other.m_rows = 0;
-		other.m_step = 0;
-		other.m_channels = 0;
-		other.m_owner = false;
-	}
-
-	Mat(const Mat& other) = delete;
-
-
-	Mat& operator=(const Mat& other) = delete;
-	Mat& operator=(Mat&& other) = delete;
 
 	int32_t cols() const { return m_cols; }
 	int32_t rows() const { return m_rows; }
@@ -160,7 +176,11 @@ private:
 	int32_t m_channels;
 	bool m_owner;
 };
- 
+template<typename T>
+inline bool isNull(const Mat<T>& mat)
+{
+	return mat.m_matrix.size() == 0 ? 1 : 0;
+}
 template<typename T>
 Mat<T> inline eye(int m, int n) //TODO: if that does not work, try removing the inline
 {
