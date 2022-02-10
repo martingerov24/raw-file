@@ -1,4 +1,4 @@
-emplate<class CastOp, class VecOp, typename AT>
+template<class CastOp, class VecOp, typename AT>
 static void remapBilinear(const Mat& _src, Mat& _dst, const Mat& _xy,
 	const Mat& _fxy, const void* _wtab,
 	int borderType, const Scalar& _borderValue)

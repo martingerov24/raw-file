@@ -14,17 +14,17 @@ set(OpenCV_LIBS opencv_core454 opencv_highgui454 opencv_videoio454 opencv_imgcod
  
 #-----------imgui Dependencies----------
 set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/imgui")
-set(IMGUI_SOURCES
-    "${IMGUI_DIR}/imgui_demo.cpp"
-    "${IMGUI_DIR}/imgui_draw.cpp"
-    "${IMGUI_DIR}/backends/imgui_impl_glfw.cpp"
-    "${IMGUI_DIR}/backends/imgui_impl_glfw.h"
-    "${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp"
-    "${IMGUI_DIR}/backends/imgui_impl_opengl3.h"
-    "${IMGUI_DIR}/imgui_tables.cpp"
-    "${IMGUI_DIR}/imgui_widgets.cpp"
-    "${IMGUI_DIR}/imgui.cpp"
-)
+#set(IMGUI_SOURCES
+#    "${IMGUI_DIR}/imgui_demo.cpp"
+#    "${IMGUI_DIR}/imgui_draw.cpp"
+#    "${IMGUI_DIR}/backends/imgui_impl_glfw.cpp"
+#    "${IMGUI_DIR}/backends/imgui_impl_glfw.h"
+#    "${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp"
+#    "${IMGUI_DIR}/backends/imgui_impl_opengl3.h"
+#    "${IMGUI_DIR}/imgui_tables.cpp"
+#    "${IMGUI_DIR}/imgui_widgets.cpp"
+#    "${IMGUI_DIR}/imgui.cpp"
+#)
 find_package(OpenGL REQUIRED)
 set( imgui_impl_files
     ${IMGUI_DIR}/examples/imgui_impl_glfw.h
@@ -60,7 +60,9 @@ set(SOURCES
 	header/keypoints_Test.cpp
 	header/atomicAdd.cu
 	dep/Dep.h
-	dep/cpuTest.h
+	cuda/undisort.h
+	lookup/remapBilinear.h
+	lookup/remapNearest.h
 )
 
 add_executable(file_reading_cuda ${SOURCES})

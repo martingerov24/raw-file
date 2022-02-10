@@ -2,7 +2,6 @@
 #include <cstdint>
 #include <vector>
 #include <algorithm>
-
 template<typename T>
 struct Point2
 {
@@ -29,10 +28,6 @@ struct Point3
 
 typedef Point3<float> Point3f;
 typedef Point3<int32_t> Point3i;
-#pragma once
-
-#include <cstdint>
-
 
 template<class T>
 class Mat
@@ -72,6 +67,14 @@ public:
 	{
 		std::swap(*this, other);
 		return *this;
+	}
+	bool operator!=(const Mat<T>& other)
+	{
+		return m_matrix == other.m_matrix;
+	}
+	bool operator==(const Mat<T>& other) // the same as the top
+	{
+		return m_matrix == other.m_matrix;
 	}
 
 	Mat(Mat&& other) 
@@ -115,8 +118,9 @@ public:
 	}
 	bool hasData()
 	{
-		return this->m_matrix.size() == 0 ? 1 : 0;
+		return this->m_matrix.size() == 0 ? 0 : 1;
 	}
+	
 	void createPitched(int x, int y) {
 		m_cols = x;
 		m_rows = y;
@@ -166,9 +170,9 @@ public:
 		}
 		return *this;
 	}
-
-private:
+	//for now m_matrix will be public, because it is a lot accessed in undisort.h
 	std::vector<T> m_matrix;
+private:
 	//T* m_matrix;
 	int32_t m_cols;
 	int32_t m_rows;
@@ -224,3 +228,4 @@ private:
 	int32_t m_step;
 	T* m_matrix;
 };
+

@@ -1,4 +1,4 @@
-atic const void* initInterTab2D(int method, bool fixpt)
+static const void* initInterTab2D(int method, bool fixpt)
 {
 	static bool inittab[INTER_MAX + 1] = { false };
 	float* tab = 0;
@@ -72,15 +72,4 @@ atic const void* initInterTab2D(int method, bool fixpt)
 		inittab[method] = true;
 	}
 	return fixpt ? (const void*)itab : (const void*)tab;
-}
-
-#ifndef __MINGW32__
-static bool initAllInterTab2D()
-{
-	return  initInterTab2D(INTER_LINEAR, false) &&
-		initInterTab2D(INTER_LINEAR, true) &&
-		initInterTab2D(INTER_CUBIC, false) &&
-		initInterTab2D(INTER_CUBIC, true) &&
-		initInterTab2D(INTER_LANCZOS4, false) &&
-		initInterTab2D(INTER_LANCZOS4, true);
 }
