@@ -223,8 +223,6 @@ public:
 		cudaStatus = cudaMemcpyAsync(h_Data.data(), d_result, sizeof(uint8_t) * size, cudaMemcpyDeviceToHost, providedStream);
 		assert(cudaStatus == cudaSuccess && "not able to transfer device to host!");
 	}
-	__host__ 
-		void undistortPoints(cudaStream_t providedStream, const Mat<float>& K, const Mat<float>& distortion);
     __host__
     void rawValue(cudaStream_t& providedStream);
 

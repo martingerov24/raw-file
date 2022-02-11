@@ -2,7 +2,8 @@
 #include "../dep/Dep.h"
 #include "../lookup/remapBilinear.h"
 #include "../lookup/remapNearest.h"
-
+#include "../lookup/RemapInvoker.h"
+#include "../lookup/Rect.h"
 #define INTER_MAX 7
 #define CV_CN_SHIFT   3
 #define CV_DEPTH_MAX	(1 << CV_CN_SHIFT)
@@ -377,13 +378,6 @@ static void initInterTab1D(int method, float* tab, int tabsz)
 	//	CV_Error(CV_StsBadArg, "Unknown interpolation method");
 }
 
-typedef void (*RemapNNFunc)(const Matf& _src, Matf& _dst, const Matf& _xy, // everything typedefed to float, because i could not find what was it
-	int borderType, const Scalar& _borderValue);
-
-typedef void (*RemapFunc)(const Matf& _src, Matf& _dst, const Matf& _xy,
-	const Matf& _fxy, const void* _wtab,
-	int borderType, const Scalar& _borderValue);
-
 static const void* initInterTab2D(int method, bool fixpt)
 {
 	static bool inittab[INTER_MAX + 1] = { false };
@@ -457,8 +451,8 @@ static const void* initInterTab2D(int method, bool fixpt)
 	return fixpt ? (const void*)itab : (const void*)tab;
 }
 //------------------remap
-void remap(Matf& _src, Matf _dst,
-	Matf& _map1, Matf& _map2,
+void remap(const Matf& _src, Matf _dst, // mat16s has to be 2 channeled TODO:
+	Mat16s& _map1, Mat16s& _map2,
 	int interpolation, int borderType/*, const Scalar& borderValue*/)  // TODO: ASK SASHO FOR SATURATE_CAST
 {
 
@@ -508,8 +502,7 @@ void remap(Matf& _src, Matf _dst,
 		assert(ifunc != 0);
 		ctab = initInterTab2D(interpolation, fixpt);
 	}
-
-	const Matf* m1 = &_map1, * m2 = &_map2;
+	const Mat16s* m1 = &_map1, * m2 = &_map2;
 	//(map1.type() == CV_16SC2 && (map2.type() == CV_16UC1 || map2.type() == CV_16SC1 || map2.empty())) || // it is 16sc2 (map1), and 16uc1 // so yes
 	//(map2.type() == CV_16SC2 && (map1.type() == CV_16UC1 || map1.type() == CV_16SC1 || map1.empty()))
 
@@ -517,8 +510,8 @@ void remap(Matf& _src, Matf _dst,
 			std::swap(m1, m2);
 
 
-	RemapInvoker invoker(src, dst, m1, m2,
-		borderType, borderValue, planar_input, nnfunc, ifunc,
+	RemapInvoker invoker(_src, dst, m1, m2,
+		borderType, planar_input, nnfunc, ifunc, // Matf src, Matf dst, Matf m1, Matf m2, int broderType, bool planar_input, RemapNNFunc nnfunc, RemapFunc ifunc, const void * ctab
 		ctab);
 	parallel_for_(Range(0, dst.rows), invoker, dst.total() / (double)(1 << 16));
 }

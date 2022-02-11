@@ -1,7 +1,9 @@
+#pragma once
+#define CV_CN_MAX   512
 template<class CastOp, class VecOp, typename AT>
-static void remapBilinear(const Mat& _src, Mat& _dst, const Mat& _xy,
-	const Mat& _fxy, const void* _wtab,
-	int borderType, const Scalar& _borderValue)
+static void remapBilinear(const Matf& _src, Matf& _dst, const Matf& _xy,
+	const Matf& _fxy, const void* _wtab,
+	int borderType, const const void* _borderValue)
 {
 	typedef typename CastOp::rtype T;
 	typedef typename CastOp::type1 WT;
@@ -15,7 +17,7 @@ static void remapBilinear(const Mat& _src, Mat& _dst, const Mat& _xy,
 	VecOp vecOp;
 
 	for (int k = 0; k < cn; k++)
-		cval[k] = saturate_cast<T>(_borderValue[k & 3]);
+		cval[k] = static_cast<T>(_borderValue[k & 3]);
 
 	unsigned width1 = std::max(ssize.width - 1, 0), height1 = std::max(ssize.height - 1, 0);
 	CV_Assert(!ssize.empty());

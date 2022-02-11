@@ -4,6 +4,7 @@
 #include "imgui/backends/imgui_impl_opengl3.h"
 
 #include "../dep/Dep.h"
+#include "../cuda/undisort.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../header/stb_image.h"

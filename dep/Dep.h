@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <vector>
 #include <algorithm>
+#include "../lookup/Rect.h"
 template<typename T>
 struct Point2
 {
@@ -45,7 +46,13 @@ public:
 		m_step = m_channels * m_cols * sizeof(T);
 		m_owner = false;
 	}
-
+	Mat(Mat const& src, const Rect& roi)
+		: Mat(src)
+	{
+		rows = roi.height;
+		cols = roi.width;
+		m_matrix(roi.y, roi.x);
+	}
 	Mat(int x, int y, int other_channels = 1)
 	{
 		create(x, y, other_channels);
@@ -54,7 +61,6 @@ public:
 	Mat(const Mat& other)
 	{
 		*this = other;
-		return *this;
 	};
 
 	Mat& operator=(const Mat& other)
@@ -77,6 +83,16 @@ public:
 		return m_matrix == other.m_matrix;
 	}
 
+	unsigned char* ptr(int row, int col = 0)
+	{
+		return const_cast<unsigned char*>(const_cast<const Mat*>(this)->ptr(row, col)); // this was copied from opencv, why is it uchar tho...idk
+	}
+
+	const unsigned char* ptr(int row, int col = 0) const
+	{
+		return m_matrix.data() + step * row + sizeof(T) * col;
+	}
+
 	Mat(Mat&& other) 
 	{
 		m_cols = other.m_cols;
@@ -93,7 +109,7 @@ public:
 		other.m_channels = 0;
 		other.m_owner = false;
 	}
-
+	
 	void create(int x, int y, int other_channels = 1)
 	{
 		m_cols = x;
@@ -154,8 +170,8 @@ public:
 	int32_t step() const { return m_step; }
 	int32_t channels() const { return m_channels; }
 
-	T* ptr(int y = 0) { return reinterpret_cast<T*>(reinterpret_cast<char*>(m_matrix) + y * step()); }
-	const T* ptr(int y = 0) const { return reinterpret_cast<const T*>(reinterpret_cast<const char*>(m_matrix) + y * step()); }
+	//T* ptr(int y = 0) { return reinterpret_cast<T*>(reinterpret_cast<char*>(m_matrix) + y * step()); }
+	//const T* ptr(int y = 0) const { return reinterpret_cast<const T*>(reinterpret_cast<const char*>(m_matrix) + y * step()); }
 
 	T& operator ()(int y, int x) { return ptr(y)[x]; }
 	const T& operator ()(int y, int x) const { return ptr(y)[x]; }
@@ -185,6 +201,7 @@ inline bool isNull(const Mat<T>& mat)
 {
 	return mat.m_matrix.size() == 0 ? 1 : 0;
 }
+
 template<typename T>
 Mat<T> inline eye(int m, int n) //TODO: if that does not work, try removing the inline
 {
@@ -199,6 +216,18 @@ typedef Mat<float> Matf;
 typedef Mat<int> Mati;
 typedef Mat<int16_t> Mat16s;
 typedef Mat<uint16_t> Mat16u;
+
+template<typename T>
+inline unsigned char* ptr(const Mat<T>& m, int row, int col = 0)
+{
+	return const_cast<unsigned char*>(const_cast<const Mat*>(this)->ptr(m, row, col)); // this was copied from opencv, why is it uchar tho...idk
+}
+
+template<typename T>
+inline const T* ptr(const Mat<T>& m, int row, int col = 0)
+{
+	return m.m_matrix.data() + m.m_step * row + sizeof(T) * col;
+}
 
 template<class T>
 class MatView
