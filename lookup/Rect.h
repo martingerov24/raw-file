@@ -3,7 +3,8 @@
 #include "../dep/Dep.h"
 #include <cassert>
 
-template<typename _Tp> class Size_
+template<typename _Tp> 
+class Size_
 {
 public:
 	typedef _Tp value_type;
@@ -41,7 +42,8 @@ typedef Size_<float> Size2f;
 typedef Size2i Size;
 
 
-template<typename _Tp> class Rect_
+template<typename _Tp> 
+class Rect_
 {
 public:
 	typedef _Tp value_type;

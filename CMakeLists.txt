@@ -61,10 +61,6 @@ set(SOURCES
 	header/atomicAdd.cu
 	dep/Dep.h
 	cuda/undisort.h
-	lookup/remapBilinear.h
-	lookup/remapNearest.h
-	lookup/Rect.h
-	lookup/RemapInvoker.h
 )
 
 add_executable(file_reading_cuda ${SOURCES})

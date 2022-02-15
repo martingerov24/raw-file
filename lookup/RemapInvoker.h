@@ -105,7 +105,7 @@ class RemapInvoker :
 	public ParallelLoopBody
 {
 public:
-	RemapInvoker(Matf _src, Matf _dst, const Mat16s* _m1, const Mat16s* _m2, int _broderType, bool _planar_input, RemapNNFunc _nnfunc, RemapFunc _ifunc, const void* _ctab) :
+	RemapInvoker(Matf _src, Matf _dst, const Mat16s* _m1, const Mat16u* _m2, int _broderType, bool _planar_input, RemapNNFunc _nnfunc, RemapFunc _ifunc, const void* _ctab) :
 		ParallelLoopBody(), src(&_src), dst(&_dst), m1(_m1), m2(_m2),
 		borderType(_broderType),
 		planar_input(_planar_input), nnfunc(_nnfunc), ifunc(_ifunc), ctab(_ctab)
@@ -132,81 +132,81 @@ public:
 			{
 				int brows = std::min(brows0, range.end - y);
 				int bcols = std::min(bcols0, dst->cols() - x);
-				auto dpart(*dst, Rect(x, y, bcols, brows));
-				auto bufxy(_bufxy, Rect(0, 0, bcols, brows));
+				Matf dpart(*dst, Rect(x, y, bcols, brows));
+				Mat16s bufxy(_bufxy, Rect(0, 0, bcols, brows));
 
-				if (nnfunc) // nope
-				{
-					if (m2->hasData() == false) // the data is already in the right format
-						bufxy = (*m1)(Rect(x, y, bcols, brows));
-					else if (map_depth != CV_32F)
-					{
-						for (y1 = 0; y1 < brows; y1++)
-						{
-							short* XY = bufxy.ptr<short>(y1);
-							const short* sXY = m1->ptr<short>(y + y1) + x * 2;
-							const ushort* sA = m2->ptr<ushort>(y + y1) + x;
-
-							for (x1 = 0; x1 < bcols; x1++)
-							{
-								int a = sA[x1] & (INTER_TAB_SIZE2 - 1);
-								XY[x1 * 2] = sXY[x1 * 2] + NNDeltaTab_i[a][0];
-								XY[x1 * 2 + 1] = sXY[x1 * 2 + 1] + NNDeltaTab_i[a][1];
-							}
-						}
-					}
-					else if (!planar_input)
-						(*m1)(Rect(x, y, bcols, brows)).convertTo(bufxy, bufxy.depth());
-					else
-					{
-						for (y1 = 0; y1 < brows; y1++)
-						{
-							short* XY = bufxy.ptr<short>(y1);
-							const float* sX = m1->ptr<float>(y + y1) + x;
-							const float* sY = m2->ptr<float>(y + y1) + x;
-							x1 = 0;
-
-#if CV_SIMD128
-							{
-								int span = v_float32x4::nlanes;
-								for (; x1 <= bcols - span * 2; x1 += span * 2)
-								{
-									v_int32x4 ix0 = v_round(v_load(sX + x1));
-									v_int32x4 iy0 = v_round(v_load(sY + x1));
-									v_int32x4 ix1 = v_round(v_load(sX + x1 + span));
-									v_int32x4 iy1 = v_round(v_load(sY + x1 + span));
-
-									v_int16x8 dx, dy;
-									dx = v_pack(ix0, ix1);
-									dy = v_pack(iy0, iy1);
-									v_store_interleave(XY + x1 * 2, dx, dy);
-								}
-							}
-#endif
-							for (; x1 < bcols; x1++)
-							{
-								XY[x1 * 2] = saturate_cast<short>(sX[x1]);
-								XY[x1 * 2 + 1] = saturate_cast<short>(sY[x1]);
-							}
-						}
-					}
-					nnfunc(*src, dpart, bufxy, borderType, borderValue);
-					continue;
-				}
+//				if (nnfunc) // nope
+//				{
+//					if (m2->hasData() == false) // the data is already in the right format
+//						bufxy = (*m1)(Rect(x, y, bcols, brows));
+//					else if (map_depth != CV_32F)
+//					{
+//						for (y1 = 0; y1 < brows; y1++)
+//						{
+//							short* XY = bufxy.ptr<short>(y1);
+//							const short* sXY = m1->ptr<short>(y + y1) + x * 2;
+//							const ushort* sA = m2->ptr<ushort>(y + y1) + x;
+//
+//							for (x1 = 0; x1 < bcols; x1++)
+//							{
+//								int a = sA[x1] & (INTER_TAB_SIZE2 - 1);
+//								XY[x1 * 2] = sXY[x1 * 2] + NNDeltaTab_i[a][0];
+//								XY[x1 * 2 + 1] = sXY[x1 * 2 + 1] + NNDeltaTab_i[a][1];
+//							}
+//						}
+//					}
+//					else if (!planar_input)
+//						(*m1)(Rect(x, y, bcols, brows)).convertTo(bufxy, bufxy.depth());
+//					else
+//					{
+//						for (y1 = 0; y1 < brows; y1++)
+//						{
+//							short* XY = bufxy.ptr<short>(y1);
+//							const float* sX = m1->ptr<float>(y + y1) + x;
+//							const float* sY = m2->ptr<float>(y + y1) + x;
+//							x1 = 0;
+//
+//#if CV_SIMD128
+//							{
+//								int span = v_float32x4::nlanes;
+//								for (; x1 <= bcols - span * 2; x1 += span * 2)
+//								{
+//									v_int32x4 ix0 = v_round(v_load(sX + x1));
+//									v_int32x4 iy0 = v_round(v_load(sY + x1));
+//									v_int32x4 ix1 = v_round(v_load(sX + x1 + span));
+//									v_int32x4 iy1 = v_round(v_load(sY + x1 + span));
+//
+//									v_int16x8 dx, dy;
+//									dx = v_pack(ix0, ix1);
+//									dy = v_pack(iy0, iy1);
+//									v_store_interleave(XY + x1 * 2, dx, dy);
+//								}
+//							}
+//#endif
+//							for (; x1 < bcols; x1++)
+//							{
+//								XY[x1 * 2] = saturate_cast<short>(sX[x1]);
+//								XY[x1 * 2 + 1] = saturate_cast<short>(sY[x1]);
+//							}
+//						}
+//					}
+//					nnfunc(*src, dpart, bufxy, borderType, borderValue);
+//					continue;
+//				}
 
 				Mat16s bufa(_bufa, Rect(0, 0, bcols, brows));
 				for (y1 = 0; y1 < brows; y1++)
 				{
-					short* XY = bufxy.ptr<short>(y1); // was casting uchar to short, so i replaced the ptr() to return T
-					unsigned short* A = bufa.ptr<unsigned short>(y1);
+					short* XY = (short*)bufxy.ptr(y1); // was casting uchar to short, so i replaced the ptr() to return T
+					unsigned short* A = (unsigned short*)bufa.ptr(y1);
 					//short* XY = bufxy.ptr(y1);
 					//int16_t* A = bufa.ptr(y1); 
 
 					if (true) //&& (m2->type() == CV_16UC1 || m2->type() == CV_16SC1)&& m1->type() == CV_16SC2  it is ->
 					{
-						bufxy = (*m1)(Rect(x, y, bcols, brows)); // TODO:
+						bufxy = (*m1)(Rect(x, y, bcols, brows)); // TODO: i don't know what this does
 
-						const int16_t* sA = m2->ptr(y + y1) + x;
+						const int16_t* sA = (const int16_t*)m2->ptr(y + y1) + x;
 						x1 = 0;
 
 #if CV_SIMD128
@@ -220,47 +220,48 @@ public:
 						for (; x1 < bcols; x1++)
 							A[x1] = (unsigned short)(sA[x1] & (INTER_TAB_SIZE2 - 1));// has to be cast to either ushort or int16_t
 					}
-					else if (planar_input)
-					{
-						const float* sX = m1->ptr<float>(y + y1) + x;
-						const float* sY = m2->ptr<float>(y + y1) + x;
-
-						x1 = 0;
-#if CV_SIMD128
-						{
-							v_float32x4 v_scale = v_setall_f32((float)INTER_TAB_SIZE);
-							v_int32x4 v_scale2 = v_setall_s32(INTER_TAB_SIZE - 1);
-							int span = v_float32x4::nlanes;
-							for (; x1 <= bcols - span * 2; x1 += span * 2)
-							{
-								v_int32x4 v_sx0 = v_round(v_scale * v_load(sX + x1));
-								v_int32x4 v_sy0 = v_round(v_scale * v_load(sY + x1));
-								v_int32x4 v_sx1 = v_round(v_scale * v_load(sX + x1 + span));
-								v_int32x4 v_sy1 = v_round(v_scale * v_load(sY + x1 + span));
-								v_uint16x8 v_sx8 = v_reinterpret_as_u16(v_pack(v_sx0 & v_scale2, v_sx1 & v_scale2));
-								v_uint16x8 v_sy8 = v_reinterpret_as_u16(v_pack(v_sy0 & v_scale2, v_sy1 & v_scale2));
-								v_uint16x8 v_v = v_shl<INTER_BITS>(v_sy8) | (v_sx8);
-								v_store(A + x1, v_v);
-
-								v_int16x8 v_d0 = v_pack(v_shr<INTER_BITS>(v_sx0), v_shr<INTER_BITS>(v_sx1));
-								v_int16x8 v_d1 = v_pack(v_shr<INTER_BITS>(v_sy0), v_shr<INTER_BITS>(v_sy1));
-								v_store_interleave(XY + (x1 << 1), v_d0, v_d1);
-							}
-						}
-#endif
-						for (; x1 < bcols; x1++)
-						{
-							int sx = cvRound(sX[x1] * INTER_TAB_SIZE);
-							int sy = cvRound(sY[x1] * INTER_TAB_SIZE);
-							int v = (sy & (INTER_TAB_SIZE - 1)) * INTER_TAB_SIZE + (sx & (INTER_TAB_SIZE - 1));
-							XY[x1 * 2] = static_cast<short>(sx >> INTER_BITS);// here was saturate_cast
-							XY[x1 * 2 + 1] = static_cast<short>(sy >> INTER_BITS);
-							A[x1] = (unsigned short)v;
-						}
-					}
+					//else if is commented here
+//					else if (planar_input)
+//					{
+//						const float* sX = m1->ptr<float>(y + y1) + x;
+//						const float* sY = m2->ptr<float>(y + y1) + x;
+//
+//						x1 = 0;
+//#if CV_SIMD128
+//						{
+//							v_float32x4 v_scale = v_setall_f32((float)INTER_TAB_SIZE);
+//							v_int32x4 v_scale2 = v_setall_s32(INTER_TAB_SIZE - 1);
+//							int span = v_float32x4::nlanes;
+//							for (; x1 <= bcols - span * 2; x1 += span * 2)
+//							{
+//								v_int32x4 v_sx0 = v_round(v_scale * v_load(sX + x1));
+//								v_int32x4 v_sy0 = v_round(v_scale * v_load(sY + x1));
+//								v_int32x4 v_sx1 = v_round(v_scale * v_load(sX + x1 + span));
+//								v_int32x4 v_sy1 = v_round(v_scale * v_load(sY + x1 + span));
+//								v_uint16x8 v_sx8 = v_reinterpret_as_u16(v_pack(v_sx0 & v_scale2, v_sx1 & v_scale2));
+//								v_uint16x8 v_sy8 = v_reinterpret_as_u16(v_pack(v_sy0 & v_scale2, v_sy1 & v_scale2));
+//								v_uint16x8 v_v = v_shl<INTER_BITS>(v_sy8) | (v_sx8);
+//								v_store(A + x1, v_v);
+//
+//								v_int16x8 v_d0 = v_pack(v_shr<INTER_BITS>(v_sx0), v_shr<INTER_BITS>(v_sx1));
+//								v_int16x8 v_d1 = v_pack(v_shr<INTER_BITS>(v_sy0), v_shr<INTER_BITS>(v_sy1));
+//								v_store_interleave(XY + (x1 << 1), v_d0, v_d1);
+//							}
+//						}
+//#endif
+//						for (; x1 < bcols; x1++)
+//						{
+//							int sx = cvRound(sX[x1] * INTER_TAB_SIZE);
+//							int sy = cvRound(sY[x1] * INTER_TAB_SIZE);
+//							int v = (sy & (INTER_TAB_SIZE - 1)) * INTER_TAB_SIZE + (sx & (INTER_TAB_SIZE - 1));
+//							XY[x1 * 2] = static_cast<short>(sx >> INTER_BITS);// here was saturate_cast
+//							XY[x1 * 2 + 1] = static_cast<short>(sy >> INTER_BITS);
+//							A[x1] = (unsigned short)v;
+//						}
+//					}
 					else
 					{
-						const float* sXY = m1->ptr<float>(y + y1) + x * 2; // if i remove the tempalte part it may work, because i did not thought of solution TODO:
+						const float* sXY = (float*)m1->ptr(y + y1) + x * 2; // if i remove the tempalte part it may work, because i did not thought of solution TODO:
 						x1 = 0;
 
 #if CV_SIMD128
@@ -307,7 +308,8 @@ public:
 private:
 	const Matf* src;
 	Matf* dst;
-	const Mat16s* m1, * m2;
+	const Mat16s* m1;
+	const Mat16u* m2;
 	int borderType;
 	void* borderValue;
 	int planar_input;

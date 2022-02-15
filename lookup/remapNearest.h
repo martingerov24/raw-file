@@ -1,15 +1,20 @@
+#pragma once
+static inline int clip(int x, int a, int b)
+{
+	return x >= a ? (x < b ? x : b - 1) : a;
+}
 template<typename T>
-static void remapNearest(const Mat& _src, Mat& _dst, const Mat& _xy,
-	int borderType, const Scalar& _borderValue)
+static void remapNearest(const Matf& _src, Matf& _dst, const Matf& _xy,
+	int borderType, const void* _borderValue)
 {
 	Size ssize = _src.size(), dsize = _dst.size();
 	const int cn = _src.channels();
-	const T* S0 = _src.ptr<T>();
+	const T* S0 = (T*)_src.ptr();
 	T cval[CV_CN_MAX];
-	size_t sstep = _src.step / sizeof(S0[0]);
+	size_t sstep = _src.step() / sizeof(S0[0]);
 
 	for (int k = 0; k < cn; k++)
-		cval[k] = saturate_cast<T>(_borderValue[k & 3]);
+		cval[k] = static_cast<T>(_borderValue[k & 3]);
 
 	unsigned width1 = ssize.width, height1 = ssize.height;
 
@@ -21,8 +26,8 @@ static void remapNearest(const Mat& _src, Mat& _dst, const Mat& _xy,
 
 	for (int dy = 0; dy < dsize.height; dy++)
 	{
-		T* D = _dst.ptr<T>(dy);
-		const short* XY = _xy.ptr<short>(dy);
+		T* D = (T*)_dst.ptr(dy);
+		const short* XY = (short *)_xy.ptr(dy);
 
 		if (cn == 1)
 		{
@@ -41,12 +46,12 @@ static void remapNearest(const Mat& _src, Mat& _dst, const Mat& _xy,
 					}
 					else if (borderType == BORDER_CONSTANT)
 						D[dx] = cval[0];
-					else if (borderType != BORDER_TRANSPARENT)
+					/*else if (borderType != BORDER_TRANSPARENT)
 					{
 						sx = borderInterpolate(sx, ssize.width, borderType);
 						sy = borderInterpolate(sy, ssize.height, borderType);
 						D[dx] = S0[sy * sstep + sx];
-					}
+					}*/
 				}
 			}
 		}
@@ -85,12 +90,12 @@ static void remapNearest(const Mat& _src, Mat& _dst, const Mat& _xy,
 					}
 					else if (borderType == BORDER_CONSTANT)
 						S = &cval[0];
-					else
-					{
-						sx = borderInterpolate(sx, ssize.width, borderType);
-						sy = borderInterpolate(sy, ssize.height, borderType);
-						S = S0 + sy * sstep + sx * cn;
-					}
+					//else
+					//{
+					//	sx = borderInterpolate(sx, ssize.width, borderType);
+					//	sy = borderInterpolate(sy, ssize.height, borderType);
+					//	S = S0 + sy * sstep + sx * cn;
+					//}
 					for (int k = 0; k < cn; k++)
 						D[k] = S[k];
 				}

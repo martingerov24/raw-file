@@ -1,5 +1,8 @@
 #pragma once
 #define CV_CN_MAX   512
+
+
+
 template<class CastOp, class VecOp, typename AT>
 static void remapBilinear(const Matf& _src, Matf& _dst, const Matf& _xy,
 	const Matf& _fxy, const void* _wtab,
@@ -145,7 +148,7 @@ static void remapBilinear(const Matf& _src, Matf& _dst, const Matf& _xy,
 								v2 = S0[sy1 * sstep + sx0];
 								v3 = S0[sy1 * sstep + sx1];
 							}
-							else
+							/*else
 							{
 								sx0 = borderInterpolate(sx, ssize.width, borderType);
 								sx1 = borderInterpolate(sx + 1, ssize.width, borderType);
@@ -155,7 +158,7 @@ static void remapBilinear(const Matf& _src, Matf& _dst, const Matf& _xy,
 								v1 = sx1 >= 0 && sy0 >= 0 ? S0[sy0 * sstep + sx1] : cval[0];
 								v2 = sx0 >= 0 && sy1 >= 0 ? S0[sy1 * sstep + sx0] : cval[0];
 								v3 = sx1 >= 0 && sy1 >= 0 ? S0[sy1 * sstep + sx1] : cval[0];
-							}
+							}*/
 							D[0] = castOp(WT(v0 * w[0] + v1 * w[1] + v2 * w[2] + v3 * w[3]));
 						}
 					}
@@ -190,7 +193,7 @@ static void remapBilinear(const Matf& _src, Matf& _dst, const Matf& _xy,
 								((unsigned)sx >= (unsigned)(ssize.width - 1) ||
 									(unsigned)sy >= (unsigned)(ssize.height - 1)))
 								continue;
-							else
+							/*else
 							{
 								sx0 = borderInterpolate(sx, ssize.width, borderType);
 								sx1 = borderInterpolate(sx + 1, ssize.width, borderType);
@@ -200,7 +203,7 @@ static void remapBilinear(const Matf& _src, Matf& _dst, const Matf& _xy,
 								v1 = sx1 >= 0 && sy0 >= 0 ? S0 + sy0 * sstep + sx1 * cn : &cval[0];
 								v2 = sx0 >= 0 && sy1 >= 0 ? S0 + sy1 * sstep + sx0 * cn : &cval[0];
 								v3 = sx1 >= 0 && sy1 >= 0 ? S0 + sy1 * sstep + sx1 * cn : &cval[0];
-							}
+							}*/
 							for (int k = 0; k < cn; k++)
 								D[k] = castOp(WT(v0[k] * w[0] + v1[k] * w[1] + v2[k] * w[2] + v3[k] * w[3]));
 						}

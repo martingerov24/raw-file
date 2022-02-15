@@ -2,7 +2,6 @@
 #include <cstdint>
 #include <vector>
 #include <algorithm>
-#include "../lookup/Rect.h"
 template<typename T>
 struct Point2
 {
@@ -35,7 +34,7 @@ class Mat
 {
 public:
 
-	Mat() : m_cols(0), m_rows(0), m_step(0), m_matrix(nullptr), m_channels(0), m_owner(true) {}
+	Mat() : m_cols(0), m_rows(0), m_step(0), m_channels(0), m_owner(true) {}
 
 	Mat(int x, int y, std::vector<T> &matrix)
 	{
@@ -46,13 +45,13 @@ public:
 		m_step = m_channels * m_cols * sizeof(T);
 		m_owner = false;
 	}
-	Mat(Mat const& src, const Rect& roi)
-		: Mat(src)
-	{
-		rows = roi.height;
-		cols = roi.width;
-		m_matrix(roi.y, roi.x);
-	}
+	//Mat(Mat const& src, const Rect& roi)
+	//	: Mat(src)
+	//{
+	//	m_rows = roi.height;
+	//	m_cols = roi.width;
+	//	m_matrix.resize(roi.y* roi.x);
+	//}
 	Mat(int x, int y, int other_channels = 1)
 	{
 		create(x, y, other_channels);
@@ -90,9 +89,12 @@ public:
 
 	const unsigned char* ptr(int row, int col = 0) const
 	{
-		return m_matrix.data() + step * row + sizeof(T) * col;
+		return m_matrix.data() + m_step * row + sizeof(T) * col;
 	}
-
+	bool isContinuous()
+	{
+		return true;// because it is invoked many times
+	}
 	Mat(Mat&& other) 
 	{
 		m_cols = other.m_cols;
@@ -109,7 +111,16 @@ public:
 		other.m_channels = 0;
 		other.m_owner = false;
 	}
-	
+	/*int checkVector(int _elemChannels, int _depth, bool _requireContinuous) const
+	{
+		return data && (depth() == _depth || _depth <= 0) &&
+			(isContinuous() || !_requireContinuous) &&
+			((dims == 2 && (((rows == 1 || cols == 1) && channels() == _elemChannels) ||
+				(cols == _elemChannels && channels() == 1))) ||
+				(dims == 3 && channels() == 1 && size.p[2] == _elemChannels && (size.p[0] == 1 || size.p[1] == 1) &&
+					(isContinuous() || step.p[1] == step.p[2] * size.p[2])))
+			? (int)(total() * channels() / _elemChannels) : -1;
+	}*/
 	void create(int x, int y, int other_channels = 1)
 	{
 		m_cols = x;
@@ -120,7 +131,8 @@ public:
 		//mm::deallocate(m_matrix);
 		const uint64_t bytesPerLine = m_channels * m_cols * sizeof(T);
 		m_step = bytesPerLine;
-		m_matrix(m_cols * m_rows * m_channels, 0); // we create a matrix with size of the first, filled with 0
+		m_matrix.resize(m_cols * m_rows * m_channels,0); 
+		// we create a matrix with size of the first, filled with 0
 		//mm::allocate(reinterpret_cast<void**>(&m_matrix), uint64_t(m_step) * m_rows);
 	}
 
@@ -136,7 +148,22 @@ public:
 	{
 		return this->m_matrix.size() == 0 ? 0 : 1;
 	}
-	
+	Mat transpose()
+	{
+		Mat mat(m_cols, m_rows);
+		for (int i = 0; i < m_rows; i++)
+		{
+			for (int k = 0; k < m_cols; k++)
+			{
+				mat.m_matrix[i + m_cols * k] = m_matrix[k * i + k];
+			}
+		}
+		return std::move(mat);
+	}
+	T* data()
+	{
+		return m_matrix.data();
+	}
 	void createPitched(int x, int y) {
 		m_cols = x;
 		m_rows = y;
@@ -158,12 +185,7 @@ public:
 		//mm::allocate(reinterpret_cast<void**>(&m_matrix), uint64_t(m_step) * m_rows);
 	}
 
-	~Mat() {
-		if (m_owner) {
-			//mm::deallocate(m_matrix);
-			m_matrix = nullptr;
-		}
-	}
+	~Mat() = default;
 
 	int32_t cols() const { return m_cols; }
 	int32_t rows() const { return m_rows; }
@@ -173,18 +195,82 @@ public:
 	//T* ptr(int y = 0) { return reinterpret_cast<T*>(reinterpret_cast<char*>(m_matrix) + y * step()); }
 	//const T* ptr(int y = 0) const { return reinterpret_cast<const T*>(reinterpret_cast<const char*>(m_matrix) + y * step()); }
 
-	T& operator ()(int y, int x) { return ptr(y)[x]; }
-	const T& operator ()(int y, int x) const { return ptr(y)[x]; }
+	//T operator ()(int y, int x) { return ptr(y)[x]; }
+	//const T operator ()(int y, int x) const { return ptr(y)[x]; }
+
+
+	Mat& operator*(const float a) noexcept
+	{
+		return operator*=(a);
+	}
+
+
+
+	Mat& operator*=(const Mat& a) noexcept
+	{
+		Mat res(m_cols, a.m_rows);
+
+		for (int i = 0; i < m_rows; i++)
+		{
+			for (int j = 0; j < a.m_cols; j++)
+			{
+				res[i * j + j] = 0;
+
+				for (int k = 0; k < a.m_rows; k++)
+				{
+					res.m_matrix[i * j + j] += a.m_matrix[i * k + k] * m_matrix[k*j+j];
+				}
+			}
+		}
+		return std::move(res);
+	}
+	Mat& operator*(const Mat& a) noexcept
+	{
+		return operator*=(a);
+	}
+
+
+	Mat& operator+(const Mat& a) noexcept
+	{
+		Mat res(m_cols, a.m_rows);
+
+		for (int i = 0; i < m_rows; i++)
+		{
+			for (int j = 0; j < a.m_cols; j++)
+			{
+				res[i * j + j] = m_matrix[i * j + j] + a.m_matrix[i * j + j];
+			}
+		}
+		return std::move(res);
+	}
+
 
 	Mat& operator*=(const float a) noexcept
 	{
-		for (int i = 0; i < m_rows; i++) {
-			T* p = ptr(i);
-			for (int j = 0; j < m_cols; j++) {
-				p[j] *= a;
-			}
+		for (int i = 0; i < m_rows * m_cols; i++) {
+			m_matrix[i] *= a;
 		}
 		return *this;
+	}
+	float dm2x2(T in[4])
+	{
+		return in[0] * in[3] - in[1] * in[2];
+	}
+	Mat matirxOfMinors(const Mat& in)
+	{
+
+	}
+	//auto dm3x3(const Mat& in)
+	//{   // determinant of 3x3 in matrix
+	//	return in.m_channels[0] * (in.m_channels[4] * in.m_channels[8] - in.m_channels[5] * in.m_channels[7])
+	//		-  in.m_channels[1] * (in.m_channels[3] * in.m_channels[8] - in.m_channels[5] * in.m_channels[6])
+	//		+  in.m_channels[2] * (in.m_channels[3] * in.m_channels[7] - in.m_channels[4] * in.m_channels[6]);
+	//}
+	
+	Mat& inv(const Mat<T>& in)
+	{
+		float dm = dm3x3(in);
+
 	}
 	//for now m_matrix will be public, because it is a lot accessed in undisort.h
 	std::vector<T> m_matrix;
@@ -217,17 +303,17 @@ typedef Mat<int> Mati;
 typedef Mat<int16_t> Mat16s;
 typedef Mat<uint16_t> Mat16u;
 
-template<typename T>
-inline unsigned char* ptr(const Mat<T>& m, int row, int col = 0)
-{
-	return const_cast<unsigned char*>(const_cast<const Mat*>(this)->ptr(m, row, col)); // this was copied from opencv, why is it uchar tho...idk
-}
-
-template<typename T>
-inline const T* ptr(const Mat<T>& m, int row, int col = 0)
-{
-	return m.m_matrix.data() + m.m_step * row + sizeof(T) * col;
-}
+//template<typename T>
+//inline unsigned char* ptr(const Mat<T>& m, int row, int col = 0)
+//{
+//	return const_cast<unsigned char*>(const_cast<const Mat*>(this)->ptr(m, row, col)); // this was copied from opencv, why is it uchar tho...idk
+//}
+//
+//template<typename T>
+//inline const T* ptr(const Mat<T>& m, int row, int col = 0)
+//{
+//	return m.m_matrix.data() + m.m_step * row + sizeof(T) * col;
+//}
 
 template<class T>
 class MatView
