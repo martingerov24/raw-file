@@ -3,35 +3,25 @@
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
 
-#include "../dep/Dep.h"
-#include "../cuda/undisort.h"
-
 #define STB_IMAGE_IMPLEMENTATION
-#include "../../header/stb_image.h"
-//#define STB_IMAGE_RESIZE_IMPLEMENTATION
-//#include "build/stb_image_resize.h"
-#include "../../header/CudaClass.h"
+#include "stb_image.h"
+#include "cudaManager.h"
 
 #include <string>
-#include <chrono>
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <iostream>
-#include <inttypes.h>
+#include <vector>
+
 #define PROFILING 1
 #if PROFILING 
-#include "../minitrace/minitrace.h"
-#include "../minitrace/minitrace.c"
+	#include "../minitrace/minitrace.h"
+	#include "../minitrace/minitrace.c"
 #endif 
 // PROFILING
 
-extern std::vector<uint16_t> matcher_result;
-
-bool load(std::vector<uint8_t> &image,  int &width, int &height, int& channels)
-{
+bool loadJpgImage(std::vector<uint8_t> &image, int &width, int &height, int& channels) {
 	unsigned char* img = stbi_load("image.jpg", &width, &height, &channels, 1);
-	//stbir_resize_uint8(img, width, height, 0, img, width, height, 0, 1);
 	if (img == NULL) { return false; }
 	image.resize(width * height);
 	memcpy(&image[0], img, image.size());
@@ -40,17 +30,16 @@ bool load(std::vector<uint8_t> &image,  int &width, int &height, int& channels)
 	return true;
 }
 
-std::vector<uint16_t> ReadingFiles(char* fileName, int height, int width);
+std::vector<uint8_t> readingRawFile(const char* fileName, ImageParams& params);
 
-void bindTexture(GLuint texture)
-{
+void bindTexture(GLuint texture) {
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 }
-void onNewFrame()
-{
+
+void onNewFrame() {
 	glfwPollEvents();
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
@@ -59,8 +48,8 @@ void onNewFrame()
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 }
-void createContext(GLFWwindow* &window)
-{
+
+void createContext(GLFWwindow* &window) {
 	glfwMakeContextCurrent(window);
 	glfwSwapInterval(0);
 
@@ -71,33 +60,41 @@ void createContext(GLFWwindow* &window)
 	ImGui_ImplOpenGL3_Init("#version 330");
 }
 
-struct NVProf {
-	NVProf(const char* name) {
-		nvtxRangePush(name);
+struct CPUProf {
+	CPUProf(std::string& thread, std::string&name)
+		:thread(thread), name(name) {
+		MTR_BEGIN(thread, name);
 	}
-	~NVProf() {
-		nvtxRangePop();
+	~CPUProf() {
+		MTR_END(thread, name);
 	}
+	std::string& thread;
+	std::string& name;
 };
+
 #define NVPROF_SCOPE(X) NVProf __nvprof(X);
-void Loop(const std::vector<uint16_t>& data, const int height, const int width)
-{
+#define CPUPROF_SCOPE(x, y) CPUProf __cpuprof(x,y);
+
+void processAndDisplayRawImage(const std::vector<uint8_t>& data, ImageParams& params) {
 	cudaError_t cudaStatus = cudaError_t(0);
 	cudaStream_t stream;
 	cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
 	cudaStatus = cudaSetDevice(0);
 	assert(cudaStatus == cudaSuccess && "you do not have cuda capable device!");
 	cudaStatus = cudaStreamCreate(&stream);
-
-	std::vector<uint8_t> h_result;
-	int size = height * width;
-	h_result.resize(size*4);
 	
-	Cuda cuda(height, width, cudaStatus);
-	cuda.memoryAllocation(stream, size);
-	cuda.uploadToDevice(stream, data);
+	const size_t inputSize = data.size();
+	const size_t resultSize = params.size();
+	std::vector<uint8_t> h_result(resultSize);
+	const uint8_t* input = data.data();
+	uint8_t* output = h_result.data();
+	
+	Cuda cuda(params, cudaStatus);
+	cuda.memoryAllocation(stream, inputSize, resultSize);
+	cuda.uploadToDevice(stream, input);
+	//TEST run
 	cuda.rawValue(stream);
-	cuda.download(stream, h_result, size * 4);
+	cuda.download(stream, output);
 
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -120,18 +117,18 @@ void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 	GLuint texture;
 	glGenTextures(1, &texture);
 
-	while (!glfwWindowShouldClose(window))
+	while (!glfwWindowShouldClose(window)) 
 	{
 		{
 			NVPROF_SCOPE("raw - value and downloading");
 			cuda.rawValue(stream);
-			cuda.download(stream, h_result, size * 4);
+			cuda.download(stream, output);
 		}
 		onNewFrame();
 		ImGui::Begin("raw Image", &is_show);
 		bindTexture(texture);
 		cuda.sync(stream);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, h_result.data());
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, params.width, params.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, output);
 		ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(texture)), ImVec2(800, 600));
 		ImGui::End();
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
@@ -147,143 +144,25 @@ void Loop(const std::vector<uint16_t>& data, const int height, const int width)
 	glfwTerminate();
 	glfwDestroyWindow(window);
 }
-struct CPUProf
-{
-	CPUProf(std::string& thread, std::string&name)
-		:thread(thread), name(name)
-	{
-		MTR_BEGIN(thread, name);
-	}
-	~CPUProf()
-	{
-		MTR_END(thread, name);
-	}
-	std::string& thread;
-	std::string& name;
-};
 
-#define CPUPROF_SCOPE(x, y) CPUProf __cpuprof(x,y);
-
-void MatchKernel_Result(const std::vector<uint8_t>& data, const int height, const int width)
-{
-#ifdef PROFILING
-	mtr_init("../trace.json");
-	MTR_META_PROCESS_NAME("MINITRACE_test");
-	MTR_META_THREAD_NAME("main thread");
-
-	int long_running_thing_1;
-	int long_running_thing_2;
-	MTR_START("background", "long_running", &long_running_thing_1);
-	MTR_START("background", "long_running", &long_running_thing_2);
-#endif // PROFILING
-	cudaStream_t stream;
-	cudaStreamCreate(&stream);
-	
-	std::vector<uint16_t> h_result;
-	int size = height * width;
-	
-	std::vector<descriptor_t> query;
-	std::vector<descriptor_t> train;
-	CudaKeypoints cuda(data, height, width);
-
-	cuda.startup(size, leftPoint.size() / 2);
-
-	{
-		NVPROF_SCOPE("Kernel plus copy from cpu-gpu");
-		cuda.cudaUploadKeypoints(leftPoint);
-		cuda.Kernel(leftPoint.size() / 2);
-		cuda.cudaMemcpyD2H(query, leftPoint.size() / 2);
-	}
-	cuda.sync(stream);
-
-	{
-		NVPROF_SCOPE("Second kernel cpu-gpu");
-		cuda.cudaUploadKeypoints(rightPoint);
-		cuda.Kernel(rightPoint.size() / 2);
-		cuda.cudaMemcpyD2H(train, rightPoint.size() / 2);
-	}
-
-	cuda.sync(stream);
-
-	cuda.MemoryAllocationAsync(stream, query.size(), train.size());
-	{
-		CPUPROF_SCOPE(std::string("main"), std::string("for 1000 iterations -> matcher"));
-		for (int i = 0; i < 1000; ++i)
-		{
-			NVPROF_SCOPE("for a single iteration on match kernel");
-			cuda.MemcpyUploadAsyncForMatches(stream, query, train);
-			cuda.match_gpu_caller(stream, query.size(), train.size());
-			cuda.downloadAsync(stream, h_result, query.size());
-			cuda.sync(stream);
-		}
-		cuda.cudaFreeAcyncMatcher(stream);
-	}
-	for (int i = 0; i < 100; i++)
-	{
-		if (h_result[i] != matcher_result[i])
-		{
-			printf("wrong_answer\n");
-		}
-	}
-	//33.36
-#ifdef PROFILING
-	MTR_FINISH("background", "long_running", &long_running_thing_1);
-	MTR_FINISH("background", "long_running", &long_running_thing_2);
-	mtr_flush();
-	mtr_shutdown();
-#endif // PROFILING
-}
-void RawFileConverter()
-{
-	char* fileName = "fileToRead.raw";
-	int width = 3840, height = 1920;
-	const std::vector<uint16_t> &data = ReadingFiles(fileName, height, width);
-	Loop(data, height, width);
-}
-
-void MatchKernel()
-{
-	int width = 1920, height = 1200;
-	int channels;
-	std::vector<uint8_t> data;
-	if (!load(data, height, width, channels)) { throw "cannot load an image"; }
-	MatchKernel_Result(data, height, width);
-}
-
-void UndisortPoints(const std::vector<float>& points, std::vector<float>& points_undistorted, const Mat<float> &K, //fst-33, sec 14
-	const Mat<float>& distortio)
-{
-	cudaError_t cudaStatus = cudaError_t(0);
-	cudaStream_t stream;
-	cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
-	cudaStatus = cudaSetDevice(0);
-	assert(cudaStatus == cudaSuccess && "you do not have cuda capable device!");
-	cudaStatus = cudaStreamCreate(&stream);
-
-	Cuda cuda;
-	int32_t sizeofKeypoints = keypoints.size() * sizeof(float);
-	cuda.standardMemoryAllocation(stream, sizeofKeypoints, sizeofKeypoints); // the size of undisorted is the same as keypoints
-	cuda.uploadToDevice(stream, keypoints, sizeofKeypoints);
-}
-
-int main()
-{
-	RawFileConverter();
-	//MatchKernel();
+int main() {
+	char* fileName = "../../rawFile.raw";
+	ImageParams params(3000, 4000, 5008, 10);
+	std::vector<uint8_t> data = readingRawFile(fileName, params);
+	processAndDisplayRawImage(data, params);
 	return 0;
 }
 
-std::vector<uint16_t> ReadingFiles(char* fileName, int height, int width)
-{
+std::vector<uint8_t> readingRawFile(const char* fileName, ImageParams& params) {
 	FILE* rdFile = fopen(fileName, "rb+");
-	std::vector<uint16_t> data;
-	if (rdFile == 0) {
+	std::vector<uint8_t> data;
+	if (rdFile == NULL) {
 		printf("no file found!");
-		return data; 
+		return data;
 	}
-	int size = height * width;
-	data.resize(size);
-	fread(reinterpret_cast<char*>(&data[0]), 2, size, rdFile);
+	//todo check the size we read == file size
+	data.resize(params.size());
+	fread(reinterpret_cast<char*>(&data[0]), 1, params.size(), rdFile);
 	fclose(rdFile);
 	return data;
 }
