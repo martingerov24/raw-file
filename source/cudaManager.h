@@ -17,7 +17,11 @@ struct ImageParams {
 	);
 
 	inline size_t size() const { 
-        return (height * width * channels); 
+        return (height * stride); 
+    }
+
+    inline size_t numberOfPixels() const {
+        return (height * width);
     }
 
 	const int32_t height;

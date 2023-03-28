@@ -2,8 +2,7 @@
 #define THREADS_PER_BLOCK 1024
 
 __device__ __forceinline__
-uint8_t Color(uint16_t number) {
-	
+uint8_t readColorFromUnpackedRawData(uint16_t number) {
 	// this is the solution if little indian
 	uint8_t first_8_bits = number & 0b11111111; first_8_bits = first_8_bits >> 4;
 	number = number >> 8;
@@ -22,24 +21,20 @@ void kernelForRawInput(
 	, uint32_t* __restrict__ cpy_Data
 	, const int width
 	, const int height 
-	//, const int stride 
-	//, const int bpp, 
-	//, const int packed
 ) {
-	// const int pixelBytes = (packed) ? bpp : ((bpp + 7) / 8);
 	short x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	short y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
-	if (x >= width && 
-		y >= height && 
-		x < 0 && 
+	if (x >= width || 
+		y >= height || 
+		x < 0 ||
 		y < 0
 	) {
 		return;
 	}
 
 	int calc = y * width + x;
-	uint8_t n = Color(d_Data[calc]);
+	uint8_t n = d_Data[calc] >> 2;//readColorFromUnpackedRawData(d_Data[calc]);
 
 	uint8_t idx = (y & 1) + !(x & 1);
 	uint8_t rgb[4] = { 0, 0, 0, 1 };
