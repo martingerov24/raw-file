@@ -1,10 +1,33 @@
 cmake_minimum_required(VERSION 3.20)
+project(file_reading_cuda LANGUAGES CXX)
 
-project(file_reading_cuda LANGUAGES CXX CUDA)
-set(TOOLKIT_ROOT_DIR $ENV{CUDA_PATH})
-
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(OpenGL REQUIRED)
+
+if(DEFINED ENV{CUDA_PATH})
+    set(CUDA_TOOLKIT_ROOT_DIR $ENV{CUDA_PATH})
+    set(CUDA_INCLUDE_DIRS
+        ${CUDA_TOOLKIT_ROOT_DIR}/include
+        "./source/"
+    )
+    add_subdirectory(source build)
+    set(CUDA_LINK_LIBS
+        cudaRawFile
+    )
+    set(CUDA_LIBS_DIRS
+        $ENV{CUDA_MATH_LIBS_PATH}
+        $ENV{CUDNN_PATH}/lib64
+        $ENV{TRT_PATH}/lib
+        ${CUDA_TOOLKIT_ROOT_DIR}/lib64/
+    )
+    set(CUDA_LINK_RT cudart)
+    message("-- CUDA_PATH = ${CUDA_TOOLKIT_ROOT_DIR}")
+else()
+    message("-- CUDA_PATH is not set")
+endif()
+
 
 #-----------imgui Dependencies----------
 set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/imgui")
@@ -20,7 +43,6 @@ set(IMGUI_SOURCES
     "${IMGUI_DIR}/imgui.cpp"
 )
 
-find_package(OpenGL REQUIRED)
 set( imgui_impl_files
     ${IMGUI_DIR}/examples/imgui_impl_glfw.h
     ${IMGUI_DIR}/examples/imgui_impl_glfw.cpp
@@ -40,20 +62,15 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/glfw/)
 set(GLFW_LIBRARY_TYPE STATIC)
 add_subdirectory(${GLFW_DIR})
-
-set(HEADERS 
-    source/cudaManager.h
-	source/stb_image.h
-	source/stb_image_resize.h
-)
+  
 set(SOURCES
-	main.cu
-    source/cudaManager.cu
-    source/kernelnvoke.cu
+	main.cpp
+	thirdparty/stb_image.h
+	thirdparty/stb_image_resize.h
 	${IMGUI_SOURCES}
 )
 
-add_executable(${PROJECT_NAME} ${HEADERS} ${SOURCES})
+add_executable(${PROJECT_NAME} ${SOURCES})
 
 message(STATUS "====== CUDA Located: ${CUDA_INCLUDE_DIRS}")
 message(STATUS "====== IMGUI Located: ${IMGUI_DIR}")
@@ -66,14 +83,20 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends 
     ${CMAKE_CURRENT_SOURCE_DIR}/source
+    ${CMAKE_CURRENT_SOURCE_DIR}/minitrace
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
-	glad
-    glfw
     ${OPENGL_LIBRARIES}
-    ${CUDA_LIBS}
+    ${CUDA_LINK_LIBS}
     ${CMAKE_DL_LIBS}
+    ${CUDA_LINK_RT}
+    glfw
+	glad
+)
+
+target_link_directories(${PROJECT_NAME} PUBLIC
+    ${CUDA_LIBS_DIRS}
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:

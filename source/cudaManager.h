@@ -1,6 +1,5 @@
 #pragma once
 #include "cuda_runtime.h"
-#include "cuda/std/cmath"
 #include <inttypes.h>
 
 struct NVProf {
@@ -34,24 +33,21 @@ struct ImageParams {
 class Cuda
 {
 public:
-    Cuda(
-        ImageParams& _params,
-        cudaError_t _cudaStatus
-    );
+    Cuda(ImageParams& _params);
 
     __host__ ~Cuda();
     
-	__host__ void memoryAllocation(cudaStream_t& providedStream, const size_t sizeInBytes, const size_t resultSize);
+	__host__ void memoryAllocation(cudaStream_t providedStream, const size_t sizeInBytes, const size_t resultSize);
 
     __host__ void deallocate();
 
-	__host__ void uploadToDevice(cudaStream_t& providedStream, const uint8_t* data);
+	__host__ void uploadToDevice(cudaStream_t providedStream, const uint8_t* data);
 
-    __host__ void download(cudaStream_t & providedStream, uint8_t*& h_Data);
+    __host__ void download(cudaStream_t providedStream, uint8_t*& h_Data);
 
-    __host__ void rawValue(cudaStream_t& providedStream);
+    __host__ cudaError_t rawValue(cudaStream_t providedStream);
 
-    __host__ void sync(cudaStream_t & providedStream);
+    __host__ void sync(cudaStream_t providedStream);
 
     void debugOutPutFile(uint8_t*& h_cpy);
 protected:
@@ -62,4 +58,5 @@ protected:
     size_t m_sizeInBytes = 0; 
     size_t m_resultSize = 0;
 	cudaError_t cudaStatus;
+	cudaStream_t stream;
 };

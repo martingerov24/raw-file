@@ -15,8 +15,8 @@
 
 #define PROFILING 1
 #if PROFILING 
-	#include "../minitrace/minitrace.h"
-	#include "../minitrace/minitrace.c"
+	#include "minitrace.h"
+	#include "minitrace.c"
 #endif 
 // PROFILING
 
@@ -60,42 +60,7 @@ void createContext(GLFWwindow* &window) {
 	ImGui_ImplOpenGL3_Init("#version 330");
 }
 
-struct CPUProf {
-	CPUProf(std::string& thread, std::string&name)
-		:thread(thread), name(name) {
-		MTR_BEGIN(thread, name);
-	}
-	~CPUProf() {
-		MTR_END(thread, name);
-	}
-	std::string& thread;
-	std::string& name;
-};
-
-#define NVPROF_SCOPE(X) NVProf __nvprof(X);
-#define CPUPROF_SCOPE(x, y) CPUProf __cpuprof(x,y);
-
-void processAndDisplayRawImage(const std::vector<uint8_t>& data, ImageParams& params) {
-	cudaError_t cudaStatus = cudaError_t(0);
-	cudaStream_t stream;
-	cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
-	cudaStatus = cudaSetDevice(0);
-	assert(cudaStatus == cudaSuccess && "you do not have cuda capable device!");
-	cudaStatus = cudaStreamCreate(&stream);
-	
-	const size_t inputSize = data.size();
-	const size_t resultSize = params.numberOfPixels() * 4;
-	std::vector<uint8_t> h_result(resultSize);
-	const uint8_t* input = data.data();
-	uint8_t* output = h_result.data();
-	
-	Cuda cuda(params, cudaStatus);
-	cuda.memoryAllocation(stream, inputSize, resultSize);
-	cuda.uploadToDevice(stream, input);
-	//TEST run
-	cuda.rawValue(stream);
-	cuda.download(stream, output);
-
+GLFWwindow* initWindow() {
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 
@@ -108,41 +73,82 @@ void processAndDisplayRawImage(const std::vector<uint8_t>& data, ImageParams& pa
 
 	if (!window) {
 		glfwTerminate();
-		throw "no window created";
+		return nullptr;
 	}
-	cuda.sync(stream);
-	createContext(window);
+	return window;
+}
 
-	bool is_show = true;
-	GLuint texture;
-	glGenTextures(1, &texture);
-
-	while (!glfwWindowShouldClose(window)) 
-	{
-		{
-			NVPROF_SCOPE("raw - value and downloading");
-			cuda.rawValue(stream);
-			cuda.download(stream, output);
-		}
-		onNewFrame();
-		ImGui::Begin("raw Image", &is_show);
-		bindTexture(texture);
-		cuda.sync(stream);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, params.width, params.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, output);
-		ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(texture)), ImVec2(800, 600));
-		ImGui::End();
-		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-		ImGui::Render();
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-		glDeleteTextures(sizeof(texture), &texture);
-		glfwSwapBuffers(window);
-	}
-
+void terminateWindow(GLFWwindow* window) {
 	ImGui_ImplGlfw_Shutdown();
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui::DestroyContext();
 	glfwTerminate();
 	glfwDestroyWindow(window);
+}
+
+bool draw(GLFWwindow* window, const uint8_t* output, const ImageParams& params, const GLuint texture) {
+	if(output==nullptr) {
+		return false;
+	}
+	bool is_show = true;
+	onNewFrame();
+	ImGui::Begin("raw Image", &is_show);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, params.width, params.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, output);
+	ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(texture)), ImVec2(800, 600));
+	ImGui::End();
+	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	glfwSwapBuffers(window);
+	return true;
+}
+
+struct CPUProf {
+	CPUProf(std::string& thread, std::string&name)
+		:thread(thread), name(name) {
+		MTR_BEGIN(thread, name);
+	}
+	~CPUProf() {
+		MTR_END(thread, name);
+	}
+	std::string& thread;
+	std::string& name;
+};
+
+#define CPUPROF_SCOPE(x, y) CPUProf __cpuprof(x,y);
+
+void processAndDisplayRawImage(const std::vector<uint8_t>& data, ImageParams& params) {
+	// OpenGL
+	GLFWwindow* window = initWindow();
+	createContext(window);
+	GLuint texture;
+	glGenTextures(1, &texture);
+	bindTexture(texture);
+	// Data input and output parameters
+	const size_t inputSize = data.size();
+	const size_t resultSize = params.numberOfPixels() * 4;
+	std::vector<uint8_t> h_result(resultSize);
+	const uint8_t* input = data.data();
+	uint8_t* output = h_result.data();
+	// Cuda manager creation
+	cudaStream_t stream = nullptr;
+	Cuda cuda(params);
+	cuda.memoryAllocation(stream, inputSize, resultSize);
+	cuda.uploadToDevice(stream, input);
+	
+	cuda.rawValue(stream);
+	cuda.download(stream, output);
+	cuda.sync(stream);
+	
+	while (!glfwWindowShouldClose(window)) {
+		cuda.rawValue(stream);
+		cuda.download(stream, output);
+		cuda.sync(stream);
+		if(draw(window, output, params, texture) == false) {
+			break;
+		}
+	}
+	terminateWindow(window);
 }
 
 struct Pack64Bytes {
@@ -176,13 +182,10 @@ std::vector<uint8_t> processPackedData(const std::vector<uint8_t>& dataByte, Ima
 	
 	std::vector<uint16_t> result;
 	result.reserve(params.numberOfPixels());
-	//const uint16_t* data = reinterpret_cast<const uint16_t*>(dataByte.data());
 
 	Cast64toPacked64 first_64_bits;
 	Cast16toPacked16 last_16_bits;
 
-	// for(int i = 0; i < params.height/2; i++) {
-	// 	for(int j = 0; j < params.width; j+=5) {
 	for(int i = 0; i < params.height; i++) {
 		const uint8_t* line = dataByte.data() + i * params.stride;
 		int numProcessed = 0;
@@ -219,7 +222,6 @@ std::vector<uint8_t> processPackedData(const std::vector<uint8_t>& dataByte, Ima
 	std::vector<uint8_t> res(params.numberOfPixels()*sizeof(uint16_t));
 	memcpy(&res[0], result.data(), params.numberOfPixels()*sizeof(uint16_t));
 	return res;
-	//return std::vector<uint8_t>(&resDataInBytes[0], &resDataInBytes[params.numberOfPixels()*2]); //result
 }
 
 int main() {
@@ -237,7 +239,6 @@ int main() {
 		data.swap(res);
 	} 
 	processAndDisplayRawImage(data, params);
-
 	return 0;
 }
 

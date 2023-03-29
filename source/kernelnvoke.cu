@@ -43,8 +43,9 @@ void kernelForRawInput(
 	cpy_Data[calc] = *reinterpret_cast<int*>(rgb);
 }
 
-void Cuda::rawValue(cudaStream_t & providedStream) {
+cudaError_t Cuda::rawValue(cudaStream_t providedStream) {
+    cudaStream_t useStream = providedStream == nullptr ? stream : providedStream;
 	dim3 sizeOfBlock(((params.width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), params.height);
-	kernelForRawInput << <sizeOfBlock, THREADS_PER_BLOCK, 0, providedStream >> > (reinterpret_cast<uint16_t*>(d_data), reinterpret_cast<uint32_t *>(d_result), params.width, params.height);
-	auto status = cudaGetLastError();
+	kernelForRawInput << <sizeOfBlock, THREADS_PER_BLOCK, 0, useStream >> > (reinterpret_cast<uint16_t*>(d_data), reinterpret_cast<uint32_t *>(d_result), params.width, params.height);
+	return cudaGetLastError();
 }
