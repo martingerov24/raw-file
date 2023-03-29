@@ -27,7 +27,6 @@ function(BUILD_PTX name)
         ${GPU_INCLUDES}
         -ptx -o ${OUTPUT_FILE} ${SOURCE_FILE}
     )
-    add_definitions(-DCUDA_INTEROP)
     add_custom_target(${name} ALL DEPENDS ${OUTPUT_FILE})
 
     add_custom_command(
@@ -54,11 +53,15 @@ endif()
 
 set(HEADERS
     cudaManager.h
+    device/device_manager.h
+    device/cuda_include_file.h
 )
 
 set(DEVICE_SOURCES
     cudaManager.cu
     kernelnvoke.cu
+    device/device_manager.cpp
+    device/cuda_include_file.cpp
 )
 
 set_source_files_properties(${HEADERS} ${SOURCES} PROPERTIES LANGUAGE CXX)
@@ -73,6 +76,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CUDA_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/
     ${CMAKE_CURRENT_SOURCE_DIR}/../
+    ${CMAKE_CURRENT_SOURCE_DIR}/device
     ${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty
 )
 

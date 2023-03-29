@@ -1,5 +1,4 @@
 #include "cudaManager.h"
-#define THREADS_PER_BLOCK 1024
 
 __device__ __forceinline__
 uint8_t readColorFromUnpackedRawData(uint16_t number) {
@@ -15,7 +14,7 @@ uint8_t readColorFromUnpackedRawData(uint16_t number) {
 	return n;
 }
 
-__global__
+__device__
 void kernelForRawInput(
 	uint16_t* __restrict__ d_Data
 	, uint32_t* __restrict__ cpy_Data
@@ -41,11 +40,4 @@ void kernelForRawInput(
 	rgb[idx] = n;
 
 	cpy_Data[calc] = *reinterpret_cast<int*>(rgb);
-}
-
-cudaError_t Cuda::rawValue(cudaStream_t providedStream) {
-    cudaStream_t useStream = providedStream == nullptr ? stream : providedStream;
-	dim3 sizeOfBlock(((params.width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK), params.height);
-	kernelForRawInput << <sizeOfBlock, THREADS_PER_BLOCK, 0, useStream >> > (reinterpret_cast<uint16_t*>(d_data), reinterpret_cast<uint32_t *>(d_result), params.width, params.height);
-	return cudaGetLastError();
 }

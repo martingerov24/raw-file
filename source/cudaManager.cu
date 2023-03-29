@@ -1,8 +1,10 @@
 #include "cudaManager.h"
 #include "nvtx3/nvToolsExt.h"
-
+#include "cuda_include_file.h"
 #include <chrono>
 #include <cassert>
+
+#define THREADS_PER_BLOCK 1024
 
 NVProf::NVProf(const char* name) {
     nvtxRangePush(name);
@@ -12,6 +14,30 @@ NVProf::~NVProf() {
     nvtxRangePop();
 }
 #define NVPROF_SCOPE(X) NVProf __nvprof(X);
+
+Device& getDevice(int device = 0) {
+    DeviceManager &devman = DeviceManager::getInstance();
+    if (devman.getDeviceCount() == 0) {
+        throw std::runtime_error("No cuda devices");
+    }
+    return devman.getDevice(device);
+}
+
+CUstream& getStream(){
+    static CUstream stream;
+    static bool initialized = false;
+    if (initialized == false) {
+        return stream;
+    }
+    CUresult err = cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING);
+    if (err == CUDA_SUCCESS) {
+        initialized = true;
+    } else {
+        printf("Error initializing cuda stream\n");
+    }
+    return stream;
+}
+
 ImageParams::ImageParams(
     const int32_t _height,
     const int32_t _width,
@@ -24,60 +50,92 @@ ImageParams::ImageParams(
 
 Cuda::Cuda(
     ImageParams& _params
-) :params(_params)
-, d_data(nullptr)
-, d_result(nullptr) {
-    cudaStatus = cudaError_t(0);
-	cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
-	cudaStatus = cudaSetDevice(0);
-	assert(cudaStatus == cudaSuccess && "you do not have cuda capable device!");
-	cudaStatus = cudaStreamCreate(&stream);
+): params(_params)
+, input_buffer("InputBuffer")
+, output_buffer("OutputBuffer")
+, device(getDevice()) 
+{ }
+
+__host__
+void Cuda::initDeviceAndLoadKernel(const char* kernelPath, const char* kernelFunction) {
+    makeCurrent();
+    CUresult err = cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING);
+    assert(err == CUDA_SUCCESS);
+
+    err = device.setFunction(kernelPath, kernelFunction);
+    checkErrorNoRet(err);
+    synchronize();
 }
 
 __host__
-void Cuda::memoryAllocation(cudaStream_t providedStream, const size_t sizeInBytes, const size_t resultSize) {
-    cudaStream_t useStream = providedStream == nullptr ? stream : providedStream;
-    m_sizeInBytes = sizeInBytes;
-    m_resultSize = resultSize;
+void Cuda::memoryAllocation(const size_t sizeInBytes, const size_t resultSize) {
+    input_buffer.init(std::string("InputBuffer"));
+    CUresult err = CUresult(input_buffer.alloc(sizeInBytes));
+    checkErrorMNoRet(err, "could not allocate buffer");
 
-    cudaStatus = cudaMallocAsync((void**)&d_data, m_sizeInBytes, useStream);
-    assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
-
-    cudaStatus = cudaMallocAsync((void**)&d_result, m_resultSize, useStream);
-    assert(cudaStatus == cudaSuccess && "cudaMalloc failed!");
+    output_buffer.init(std::string("OutputBuffer"));
+    err = CUresult(output_buffer.alloc(resultSize));
+    checkErrorMNoRet(err, "could not allocate buffer");
 }
 
 __host__
 void Cuda::deallocate() {
-    cudaStatus = cudaFree(d_data);// it was said to -> cudaFree ( void* devPtr )Frees memory on the device.
-    assert(cudaStatus == cudaSuccess && "not able to deallocate d_data");
-    cudaStatus = cudaFree(d_result);
-    assert(cudaStatus == cudaSuccess && "not able to deallocate d_result");
+    if (input_buffer.get() != nullptr) {
+        input_buffer.freeMem();
+    } 
+    if (output_buffer.get() != nullptr) {
+        output_buffer.freeMem();
+    }
 }
 
-__host__
-void Cuda::uploadToDevice(cudaStream_t providedStream, const uint8_t* data) {
-    cudaStream_t useStream = providedStream == nullptr ? stream : providedStream;
-    // If m_sizeInBytes is 0 we have not allocated enought memory.
-    assert(m_sizeInBytes != 0);
-    cudaStatus = cudaMemcpyAsync(d_data, data, m_sizeInBytes, cudaMemcpyHostToDevice, useStream);
-    assert(cudaStatus == cudaSuccess && "not able to trainsfer data, between host and device");
+void Cuda::makeCurrent() {
+    device.makeCurrent();
 }
 
 __host__ 
-void Cuda::download(cudaStream_t providedStream, uint8_t*& h_Data) {
-    // If m_resultSize is 0, we have not allocated enought memory 
-    cudaStream_t useStream = providedStream == nullptr ? stream : providedStream;
-    assert(m_resultSize != 0);
-    cudaStatus = cudaMemcpyAsync(h_Data, d_result, m_resultSize, cudaMemcpyDeviceToHost, useStream);
-    assert(cudaStatus == cudaSuccess && "not able to transfer device to host!");
+int Cuda::upload(void* host) {
+    return input_buffer.upload(host, input_buffer.getSize());
+}
+
+__host__ 
+int Cuda::uploadAsync(void* host) {
+    makeCurrent();
+    return input_buffer.uploadAsync(
+        host,
+        input_buffer.getSize(),
+        stream
+    );
 }
 
 __host__
-void Cuda::sync(cudaStream_t providedStream) {
-    cudaStream_t useStream = providedStream == nullptr ? stream : providedStream;
-    cudaStatus = cudaStreamSynchronize(useStream);
-    assert(cudaStatus == cudaSuccess && "not able to sync!");
+int Cuda::rawValue() {
+    const int blockDimX = ((params.width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK);
+    const int blockDimY = (params.height / THREADS_PER_BLOCK);
+    void* args[] = { 
+        input_buffer.getNonConst(), 
+        output_buffer.getNonConst(), 
+        (void*)&params.width, 
+        (void*)&params.height 
+    };
+    CUresult cudaStatus = cuLaunchKernel(device.getFunction(), blockDimX, blockDimY, 1, 32, 32, 1, 0, stream, args, nullptr);
+    checkError(cudaStatus);
+    return cudaStatus;
+}
+
+__host__
+int Cuda::download(void* host) {
+    return output_buffer.download(host);
+}
+
+__host__ 
+int Cuda::downloadAsync(void* host) {
+    return output_buffer.downloadAsync(host, stream);
+}
+
+__host__ 
+void Cuda::synchronize() {
+    CUresult err = cuStreamSynchronize(stream);
+    checkErrorMNoRet(err, "could not synchronize");
 }
 
 void Cuda::debugOutPutFile(uint8_t*& h_cpy) {
@@ -95,4 +153,5 @@ void Cuda::debugOutPutFile(uint8_t*& h_cpy) {
 __host__
 Cuda::~Cuda() {
     deallocate();
+    device.freeMem();
 }

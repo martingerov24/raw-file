@@ -133,17 +133,18 @@ void processAndDisplayRawImage(const std::vector<uint8_t>& data, ImageParams& pa
 	// Cuda manager creation
 	cudaStream_t stream = nullptr;
 	Cuda cuda(params);
-	cuda.memoryAllocation(stream, inputSize, resultSize);
-	cuda.uploadToDevice(stream, input);
+	cuda.initDeviceAndLoadKernel("kernelnvoke.ptx", "kernelForRawInput");
+	cuda.memoryAllocation(inputSize, resultSize);
+	cuda.uploadAsync((void*)input);
 	
-	cuda.rawValue(stream);
-	cuda.download(stream, output);
-	cuda.sync(stream);
+	cuda.rawValue();
+	cuda.downloadAsync(output);
+	cuda.synchronize();
 	
 	while (!glfwWindowShouldClose(window)) {
-		cuda.rawValue(stream);
-		cuda.download(stream, output);
-		cuda.sync(stream);
+		cuda.rawValue();
+		cuda.download(output);
+		cuda.synchronize();
 		if(draw(window, output, params, texture) == false) {
 			break;
 		}
@@ -231,7 +232,7 @@ int main() {
 		return -1;
 	}
 
-	char* fileName = "../../rawFile.raw";
+	char* fileName = "../rawFile.raw";
 	ImageParams params(3000, 4000, 5008, 10);
 	std::vector<uint8_t> data = readingRawFile(fileName, params);
 	if (params.bpp != 16) {
