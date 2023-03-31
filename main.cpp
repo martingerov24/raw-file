@@ -5,6 +5,9 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stbi_write.h"
+
 #include "cudaManager.h"
 
 #include <string>
@@ -117,6 +120,21 @@ struct CPUProf {
 
 #define CPUPROF_SCOPE(x, y) CPUProf __cpuprof(x,y);
 
+void processWithCudaAndSaveJpg(const std::vector<uint8_t>& data, ImageParams& params) {
+	std::vector<uint8_t> h_result(params.numberOfPixels() * params.channels);
+
+	Cuda cuda(params);
+	cuda.initDeviceAndLoadKernel("kernelnvoke.ptx", "kernelForRawInput");
+	cuda.memoryAllocation(data.size(), h_result.size());
+	cuda.uploadAsync((void*)data.data());
+	
+	cuda.rawValue();
+	cuda.downloadAsync(h_result.data());
+	cuda.synchronize();
+
+	stbi_write_jpg("rawFileViewer.jpg", params.width, params.height, params.channels, h_result.data(), params.width * sizeof(int));
+}
+
 void processAndDisplayRawImage(const std::vector<uint8_t>& data, ImageParams& params) {
 	// OpenGL
 	GLFWwindow* window = initWindow();
@@ -125,27 +143,24 @@ void processAndDisplayRawImage(const std::vector<uint8_t>& data, ImageParams& pa
 	glGenTextures(1, &texture);
 	bindTexture(texture);
 	// Data input and output parameters
-	const size_t inputSize = data.size();
-	const size_t resultSize = params.numberOfPixels() * 4;
-	std::vector<uint8_t> h_result(resultSize);
-	const uint8_t* input = data.data();
-	uint8_t* output = h_result.data();
+	std::vector<uint8_t> h_result(params.numberOfPixels() * params.channels);
 	// Cuda manager creation
 	cudaStream_t stream = nullptr;
 	Cuda cuda(params);
+	
 	cuda.initDeviceAndLoadKernel("kernelnvoke.ptx", "kernelForRawInput");
-	cuda.memoryAllocation(inputSize, resultSize);
-	cuda.uploadAsync((void*)input);
+	cuda.memoryAllocation(data.size(), h_result.size());
+	cuda.uploadAsync((void*)data.data());
 	
 	cuda.rawValue();
-	cuda.downloadAsync(output);
+	cuda.downloadAsync(h_result.data());
 	cuda.synchronize();
 	
 	while (!glfwWindowShouldClose(window)) {
 		cuda.rawValue();
-		cuda.download(output);
+		cuda.download(h_result.data());
 		cuda.synchronize();
-		if(draw(window, output, params, texture) == false) {
+		if(draw(window, h_result.data(), params, texture) == false) {
 			break;
 		}
 	}
@@ -226,6 +241,7 @@ std::vector<uint8_t> processPackedData(const std::vector<uint8_t>& dataByte, Ima
 }
 
 int main() {
+	unsigned int saveJpg = 0;
 	unsigned int i = 1;
     char *c = (char*)&i;
     if (*c == 0) { //working with only Little endian
@@ -238,8 +254,12 @@ int main() {
 	if (params.bpp != 16) {
 		std::vector<uint8_t> res = processPackedData(data, params);
 		data.swap(res);
-	} 
-	processAndDisplayRawImage(data, params);
+	}
+	if(saveJpg) {
+		processWithCudaAndSaveJpg(data,params);
+	} else {
+		processAndDisplayRawImage(data, params);
+	}
 	return 0;
 }
 

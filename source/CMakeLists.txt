@@ -58,8 +58,7 @@ set(HEADERS
 )
 
 set(DEVICE_SOURCES
-    cudaManager.cu
-    kernelnvoke.cu
+    cudaManager.cpp
     device/device_manager.cpp
     device/cuda_include_file.cpp
 )

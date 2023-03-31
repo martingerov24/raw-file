@@ -53,8 +53,9 @@ public:
     friend struct Device;
     friend struct ThreadData;
 
-    DeviceBuffer(const DeviceBuffer& buffer) {}
-    void  operator=(const DeviceBuffer& buffer) {}
+    DeviceBuffer(const DeviceBuffer& buffer) = delete;
+    void  operator=(const DeviceBuffer& buffer) = delete;
+
     DeviceBuffer()
     :	name(""),
         buffer(NULL),
@@ -85,8 +86,6 @@ public:
     int downloadAsync(void* host, CUstream stream);
     // Returns the device pointer associated with this DeviceBuffer
     const void* get() const { return buffer; }
-    // Returns the device pointer associated with this DeviceBuffer
-    void* getNonConst() const { return buffer; }
     // Returns the size of the buffer allocated on the device
     size_t getSize() const { return size; }
 private:
@@ -121,6 +120,7 @@ struct Device {
     ~Device() {
         freeMem();
     }
+    CUresult setSource(const std::string& ptxFile, const CompileOptions &opts);
     //geting information from the gpu, can be print
     const std::string getInfo() const; // Produce a string out of the contained device info and return it
     // Get the device context

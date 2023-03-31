@@ -128,6 +128,71 @@ void DeviceBuffer::init(const std::string& name) {
     this->name = name;
 }
 
+std::string getFileContents(const std::string& file) {
+
+	std::ifstream ifs(file);
+	const std::string res = std::string((std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()));
+	return res;
+}
+
+CUresult Device::setSource(const std::string& ptxFile, const CompileOptions &opts) {
+	assert(context != nullptr);
+
+	std::string ptxSource = getFileContents(ptxFile);
+
+	const int bufferSize = (2048);
+	char logBuffer[bufferSize];
+	char errorBuffer[bufferSize];
+
+	const int optimizationLevel = 4;
+	const int lineInfo = 0;
+
+	int numOptions = 0;
+	CUjit_option options[20];
+	void* optionValues[20];
+
+	maxThreads = opts.maxThreads;
+
+	const int64_t maxRegisters= 65536 / maxThreads;
+	options[numOptions] = CU_JIT_MAX_REGISTERS;
+	optionValues[numOptions] = (void*)maxRegisters;
+	numOptions++;
+
+	options[numOptions] = CU_JIT_OPTIMIZATION_LEVEL;
+	optionValues[numOptions] = (void*)optimizationLevel;
+	numOptions++;
+
+	options[numOptions] = CU_JIT_GENERATE_LINE_INFO;
+	optionValues[numOptions] = (void*)lineInfo;
+	numOptions++;
+
+	// set up size of compilation log buffer
+	options[numOptions] = CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES;
+	optionValues[numOptions] = (void *)bufferSize;
+	numOptions++;
+
+	// set up pointer to the compilation log buffer
+	options[numOptions] = CU_JIT_INFO_LOG_BUFFER;
+	optionValues[numOptions] = logBuffer;
+	numOptions++;
+
+	// set up size of compilation error buffer
+	options[numOptions] = CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES;
+	optionValues[numOptions] = (void *)bufferSize;
+	numOptions++;
+
+	// set up pointer to the compilation error buffer
+	options[numOptions] = CU_JIT_ERROR_LOG_BUFFER;
+	optionValues[numOptions] = errorBuffer;
+	numOptions++;
+
+	CUresult err = CUDA_SUCCESS;
+	err = cuModuleLoadDataEx(&program, ptxSource.c_str(), numOptions, options, optionValues);
+	checkError(err);
+
+	return GPU_SUCCESS;
+}
+
 int DeviceBuffer::alloc(size_t size) {
     CUresult err = GPU_SUCCESS;
     if (buffer) {
@@ -230,11 +295,11 @@ CUresult Device::setFunction(
         printf("ptx file %s does not exist\n", filename);
 		return CUDA_ERROR_INVALID_PTX;
     }
-    CUmodule module = nullptr;
-    CUresult cudaStatus = cuModuleLoad(&module, filename);
-    checkErrorM(cudaStatus, "could not load module");
+    // CUmodule module = nullptr;
+    // CUresult cudaStatus = cuModuleLoad(&module, filename);
+    // checkErrorM(cudaStatus, "could not load module");
 
-    cudaStatus = cuModuleGetFunction(&getFunction(), module, functionName);
+    CUresult cudaStatus = cuModuleGetFunction(&function, program, functionName);
     checkErrorM(cudaStatus, "could not get funciton");
 
 	return cudaStatus;

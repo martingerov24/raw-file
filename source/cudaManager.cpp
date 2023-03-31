@@ -62,6 +62,9 @@ void Cuda::initDeviceAndLoadKernel(const char* kernelPath, const char* kernelFun
     CUresult err = cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING);
     assert(err == CUDA_SUCCESS);
 
+    CompileOptions opts;
+    opts.maxThreads = THREADS_PER_BLOCK;
+    err = device.setSource(kernelPath, opts);
     err = device.setFunction(kernelPath, kernelFunction);
     checkErrorNoRet(err);
     synchronize();
@@ -111,9 +114,11 @@ __host__
 int Cuda::rawValue() {
     const int blockDimX = ((params.width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK);
     const int blockDimY = ((params.height + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK);
+    const void* input = input_buffer.get();
+    const void* output = output_buffer.get(); 
     void* args[] = { 
-        input_buffer.getNonConst(), 
-        output_buffer.getNonConst(), 
+        (void*)&input,
+        (void*)&output,
         (void*)&params.width, 
         (void*)&params.height 
     };
