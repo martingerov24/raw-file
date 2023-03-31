@@ -4,7 +4,7 @@
 #include <chrono>
 #include <cassert>
 
-#define THREADS_PER_BLOCK 1024
+#define THREADS_PER_BLOCK 32
 
 NVProf::NVProf(const char* name) {
     nvtxRangePush(name);
@@ -110,7 +110,7 @@ int Cuda::uploadAsync(void* host) {
 __host__
 int Cuda::rawValue() {
     const int blockDimX = ((params.width + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK);
-    const int blockDimY = (params.height / THREADS_PER_BLOCK);
+    const int blockDimY = ((params.height + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK);
     void* args[] = { 
         input_buffer.getNonConst(), 
         output_buffer.getNonConst(), 

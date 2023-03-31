@@ -1,5 +1,5 @@
-#include "cudaManager.h"
-
+#include "cuda.h"
+#include "stdio.h"
 __device__ __forceinline__
 uint8_t readColorFromUnpackedRawData(uint16_t number) {
 	// this is the solution if little indian
@@ -14,16 +14,15 @@ uint8_t readColorFromUnpackedRawData(uint16_t number) {
 	return n;
 }
 
-__device__
+extern "C" __global__
 void kernelForRawInput(
-	uint16_t* __restrict__ d_Data
-	, uint32_t* __restrict__ cpy_Data
-	, const int width
-	, const int height 
+	const uint16_t* __restrict__ d_Data, 
+	uint32_t* __restrict__ cpy_Data,
+	const int width,
+	const int height 
 ) {
-	short x = (blockIdx.x * blockDim.x) + threadIdx.x;
-	short y = (blockIdx.y * blockDim.y) + threadIdx.y;
-
+	const int16_t x = (blockIdx.x * blockDim.x) + threadIdx.x;
+	const int16_t y = (blockIdx.y * blockDim.y) + threadIdx.y;
 	if (x >= width || 
 		y >= height || 
 		x < 0 ||
@@ -32,12 +31,12 @@ void kernelForRawInput(
 		return;
 	}
 
-	int calc = y * width + x;
+	const int32_t calc = y * width + x;
 	uint8_t n = d_Data[calc] >> 2;//readColorFromUnpackedRawData(d_Data[calc]);
 
 	uint8_t idx = (y & 1) + !(x & 1);
 	uint8_t rgb[4] = { 0, 0, 0, 1 };
 	rgb[idx] = n;
 
-	cpy_Data[calc] = *reinterpret_cast<int*>(rgb);
+	cpy_Data[calc] = *reinterpret_cast<int32_t*>(rgb);
 }
