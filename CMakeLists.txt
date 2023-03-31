@@ -5,17 +5,16 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenGL REQUIRED)
-message("---- $ENV{CUDA_PATH}")
+
 if(DEFINED ENV{CUDA_PATH})
     set(CUDA_TOOLKIT_ROOT_DIR $ENV{CUDA_PATH})
-    set(CUDA_INCLUDE_DIRS
-        ${CUDA_TOOLKIT_ROOT_DIR}/include
-        "./source/"
+    set(CUDA_INCLUDE_DIRS 
+        ${CUDA_TOOLKIT_ROOT_DIR}/include 
+        ${CMAKE_CURRENT_SOURCE_DIR}/source/
+        ${CMAKE_CURRENT_SOURCE_DIR}/source/device
     )
     add_subdirectory(source build)
-    set(CUDA_LINK_LIBS
-        cudaRawFile
-    )
+    set(CUDA_LINK_LIBS cudaRawFile)
     set(CUDA_LIBS_DIRS
         $ENV{CUDA_MATH_LIBS_PATH}
         $ENV{CUDNN_PATH}/lib64
@@ -35,7 +34,7 @@ function(checkPath ARG1)
 endfunction()
 
 #-----------imgui Dependencies----------
-set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/imgui")
+set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui")
 set(IMGUI_SOURCES
     "${IMGUI_DIR}/imgui_demo.cpp"
     "${IMGUI_DIR}/imgui_draw.cpp"
@@ -47,11 +46,9 @@ set(IMGUI_SOURCES
     "${IMGUI_DIR}/imgui_widgets.cpp"
     "${IMGUI_DIR}/imgui.cpp"
 )
-set( imgui_impl_files
-    ${IMGUI_DIR}/examples/imgui_impl_glfw.h
-    ${IMGUI_DIR}/examples/imgui_impl_glfw.cpp
-    ${IMGUI_DIR}/examples/imgui_impl_opengl3.h
-    ${IMGUI_DIR}/examples/imgui_impl_opengl3.cpp
+set(IMGUI_INCLUDES 
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends 
 )
 
 #-----------glad Dependencies-----------
@@ -81,9 +78,8 @@ add_subdirectory(${GLFW_DIR})
   
 set(SOURCES
 	main.cpp
-	${IMGUI_SOURCES}
+    ${IMGUI_SOURCES}
 )
-
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 message(STATUS "====== CUDA Located: ${CUDA_INCLUDE_DIRS}")
@@ -94,18 +90,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CUDA_INCLUDE_DIRS}
     ${GLAD_INCLUDE}
     ${GLFW_INCLUDE}
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends 
-    ${CMAKE_CURRENT_SOURCE_DIR}/source
-    ${CMAKE_CURRENT_SOURCE_DIR}/source/device
-    ${CMAKE_CURRENT_SOURCE_DIR}/minitrace
+    ${IMGUI_INCLUDES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/minitrace
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
     ${OPENGL_LIBRARIES}
     ${CUDA_LINK_LIBS}
     ${CMAKE_DL_LIBS}
-    ${CUDA_LINK_RT}
 	${GLAD_LIBS}
     ${GLFW_LIBS}
 )
