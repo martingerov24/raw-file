@@ -1,27 +1,19 @@
-#include <GLFW/glfw3.h>
-#include "imgui/imgui.h"
-#include "imgui/backends/imgui_impl_glfw.h"
-#include "imgui/backends/imgui_impl_opengl3.h"
-
+#define PROFILING 1
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image.h"
 #include "stbi_write.h"
 
 #include "cudaManager.h"
+#include "windowManager.h"
 
 #include <string>
-
-#include <stdio.h>
-#include <stdlib.h>
 #include <vector>
 
-#define PROFILING 1
 #if PROFILING 
 	#include "minitrace.h"
-	#include "minitrace.c"
-#endif 
-// PROFILING
+#endif /*PROFILING*/
+
 
 bool loadJpgImage(std::vector<uint8_t> &image, int &width, int &height, int& channels) {
 	unsigned char* img = stbi_load("image.jpg", &width, &height, &channels, 1);
@@ -33,77 +25,18 @@ bool loadJpgImage(std::vector<uint8_t> &image, int &width, int &height, int& cha
 	return true;
 }
 
-std::vector<uint8_t> readingRawFile(const char* fileName, ImageParams& params);
-
-void bindTexture(GLuint texture) {
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-}
-
-void onNewFrame() {
-	glfwPollEvents();
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
-}
-
-void createContext(GLFWwindow* &window) {
-	glfwMakeContextCurrent(window);
-	glfwSwapInterval(0);
-
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-
-	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init("#version 330");
-}
-
-GLFWwindow* initWindow() {
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	if (!glfwInit()) {
-		throw "glfwInit() FAILED!";
+std::vector<uint8_t> readingRawFile(const char* fileName, ImageParams& params) {
+	FILE* rdFile = fopen(fileName, "rb+");
+	std::vector<uint8_t> data;
+	if (rdFile == NULL) {
+		printf("no file found!");
+		return data;
 	}
-
-	GLFWwindow* window = glfwCreateWindow(800, 600, "Raw-File Viewer", NULL, NULL);
-
-	if (!window) {
-		glfwTerminate();
-		return nullptr;
-	}
-	return window;
-}
-
-void terminateWindow(GLFWwindow* window) {
-	ImGui_ImplGlfw_Shutdown();
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui::DestroyContext();
-	glfwTerminate();
-	glfwDestroyWindow(window);
-}
-
-bool draw(GLFWwindow* window, const uint8_t* output, const ImageParams& params, const GLuint texture) {
-	if(output==nullptr) {
-		return false;
-	}
-	bool is_show = true;
-	onNewFrame();
-	ImGui::Begin("raw Image", &is_show);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, params.width, params.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, output);
-	ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(texture)), ImVec2(800, 600));
-	ImGui::End();
-	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-	glfwSwapBuffers(window);
-	return true;
+	//todo check the size we read == file size
+	data.resize(params.size());
+	fread(reinterpret_cast<char*>(&data[0]), 1, params.size(), rdFile);
+	fclose(rdFile);
+	return data;
 }
 
 struct CPUProf {
@@ -137,11 +70,8 @@ void processWithCudaAndSaveJpg(const std::vector<uint8_t>& data, ImageParams& pa
 
 void processAndDisplayRawImage(const std::vector<uint8_t>& data, ImageParams& params) {
 	// OpenGL
-	GLFWwindow* window = initWindow();
-	createContext(window);
-	GLuint texture;
-	glGenTextures(1, &texture);
-	bindTexture(texture);
+	WindowManager window;
+	window.init();
 	// Data input and output parameters
 	std::vector<uint8_t> h_result(params.numberOfPixels() * params.channels);
 	// Cuda manager creation
@@ -156,41 +86,16 @@ void processAndDisplayRawImage(const std::vector<uint8_t>& data, ImageParams& pa
 	cuda.downloadAsync(h_result.data());
 	cuda.synchronize();
 	
-	while (!glfwWindowShouldClose(window)) {
+	while (window.shouldClose()) {
 		cuda.rawValue();
 		cuda.download(h_result.data());
 		cuda.synchronize();
-		if(draw(window, h_result.data(), params, texture) == false) {
+		if(window.draw(h_result.data(), params) == false) {
 			break;
 		}
 	}
-	terminateWindow(window);
+	window.terminate();
 }
-
-struct Pack64Bytes {
-	uint64_t remainder : 4;
-	uint64_t F : 10;
-	uint64_t E : 10;
-	uint64_t D : 10;
-	uint64_t C : 10;
-	uint64_t B : 10;
-	uint64_t A : 10;
-};
-
-struct Pack16Bytes {
-	uint16_t B : 10;
-	uint16_t remainder : 6;
-};
-
-union Cast64toPacked64 {
-	Pack64Bytes casted;
-	uint64_t element;
-};
-
-union Cast16toPacked16 {
-	Pack16Bytes casted;
-	uint16_t element;
-};
 
 std::vector<uint8_t> processPackedData(const std::vector<uint8_t>& dataByte, ImageParams& params) {
 	assert(dataByte.size() == params.size());
@@ -261,18 +166,4 @@ int main() {
 		processAndDisplayRawImage(data, params);
 	}
 	return 0;
-}
-
-std::vector<uint8_t> readingRawFile(const char* fileName, ImageParams& params) {
-	FILE* rdFile = fopen(fileName, "rb+");
-	std::vector<uint8_t> data;
-	if (rdFile == NULL) {
-		printf("no file found!");
-		return data;
-	}
-	//todo check the size we read == file size
-	data.resize(params.size());
-	fread(reinterpret_cast<char*>(&data[0]), 1, params.size(), rdFile);
-	fclose(rdFile);
-	return data;
 }

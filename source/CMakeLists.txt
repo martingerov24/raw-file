@@ -52,6 +52,7 @@ else()
 endif()
 
 set(HEADERS
+    ../parameters.h
     cudaManager.h
     device/device_manager.h
     device/cuda_include_file.h
